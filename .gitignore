@@ -38,3 +38,5 @@ docs/uploads-originais/
 /abacus/
 .env.production
 next-build.zip
+ponto-importar.sql
+*.sql
