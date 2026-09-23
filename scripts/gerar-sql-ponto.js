@@ -8,6 +8,24 @@ const bcrypt = require('bcryptjs');
 const [, , inPath, outPath] = process.argv;
 const d = JSON.parse(fs.readFileSync(inPath, 'utf8'));
 
+// Só se importam registos de contas incluídas na exportação (a chave estrangeira
+// para User rejeita o resto). Em campos opcionais, a ligação fica a NULL.
+const userIds = new Set(d.colaboradores.map((u) => u.id));
+const skipped = [];
+function ownedByKnownUser(name, rows) {
+  const ok = rows.filter((r) => userIds.has(r.userId));
+  if (ok.length < rows.length) skipped.push(`${name}: ${rows.length - ok.length}`);
+  return ok;
+}
+for (const r of [...d.funcoes.perfisSalariais, ...d.funcoes.recibos]) {
+  if (r.userId && !userIds.has(r.userId)) r.userId = null;
+}
+d.calendario.registosPonto = ownedByKnownUser('registos de ponto', d.calendario.registosPonto);
+d.calendario.faltas = ownedByKnownUser('faltas', d.calendario.faltas);
+d.calendario.ferias = ownedByKnownUser('férias', d.calendario.ferias);
+d.calendario.diasSemTarefas = ownedByKnownUser('dias sem tarefas', d.calendario.diasSemTarefas);
+d.fichas = ownedByKnownUser('fichas', d.fichas);
+
 function dt(v) {
   if (!v) return 'NULL';
   const s = new Date(v).toISOString(); // UTC, como o Prisma grava
@@ -125,3 +143,4 @@ out.push('COMMIT;');
 out.push('SET FOREIGN_KEY_CHECKS=1;');
 fs.writeFileSync(outPath, out.filter(Boolean).join('\n') + '\n');
 console.log(`SQL gerado: ${outPath}`);
+if (skipped.length) console.log(`Ignorados (conta não exportada): ${skipped.join('; ')}`);
