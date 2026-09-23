@@ -3,11 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node node_modules/prisma/build/index.js generate && node node_modules/next/dist/bin/next build",
+    "build": "node --disable-wasm-trap-handler node_modules/prisma/build/index.js generate && node --disable-wasm-trap-handler node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "echo skip-build",
-    "db:push": "node node_modules/prisma/build/index.js db push --skip-generate"
+    "db:push": "node --disable-wasm-trap-handler node_modules/prisma/build/index.js db push --skip-generate"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts"
