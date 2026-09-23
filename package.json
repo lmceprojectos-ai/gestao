@@ -7,7 +7,8 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "echo skip-build",
-    "db:push": "node --disable-wasm-trap-handler node_modules/prisma/build/index.js db push --skip-generate"
+    "db:push": "node --disable-wasm-trap-handler node_modules/prisma/build/index.js db push --skip-generate",
+    "db:generate": "node --disable-wasm-trap-handler node_modules/prisma/build/index.js generate"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts"
