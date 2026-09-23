@@ -42,6 +42,7 @@ import {
   ScanLine,
   Clock,
   Share2,
+  FileSearch,
 } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
@@ -79,6 +80,7 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/faturas?tipo=nota&origem=fornecedor', label: 'Notas', icon: FileMinus, tipo: 'nota', origem: 'fornecedor', sub: true, area: 'fornecedores' },
     { href: '/faturas?tipo=orcamento&origem=fornecedor', label: 'Orçamentos', icon: ClipboardList, tipo: 'orcamento', origem: 'fornecedor', sub: true, area: 'fornecedores' },
     { href: '/pagamentos', label: 'Pagamentos', icon: ArrowUpCircle, area: 'fornecedores' },
+    { href: '/efatura', label: 'e-Fatura (AT)', icon: FileSearch, area: 'fornecedores' },
   ] },
   { title: 'Documentos', items: [
     { href: '/despesas', label: 'Despesas', icon: ShoppingCart, area: 'documentos' },

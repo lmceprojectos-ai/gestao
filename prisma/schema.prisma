@@ -959,3 +959,31 @@ model SocialCampaign {
 
   @@index([estado])
 }
+
+// Documentos comunicados à AT pelos fornecedores (Excel do e-Fatura, importado
+// mês a mês). O estado "na app / em falta" é calculado ao consultar, cruzando
+// com as faturas de fornecedor e as despesas — ver lib/efatura/match.ts.
+model EFaturaDocumento {
+  id           String   @id @default(cuid())
+  mes          String   // AAAA-MM (da data de emissão)
+  setor        String?
+  emitenteNif  String
+  emitenteNome String   @db.VarChar(512)
+  numero       String
+  atcud        String?
+  tipo         String
+  dataEmissao  DateTime
+  total        Float
+  iva          Float?
+  base         Float?
+  situacao     String?
+  ignorado     Boolean  @default(false) // marcado como "não é para lançar na app"
+  nota         String?  @db.Text
+  ficheiro     String?  @db.VarChar(512)
+  importadoPor String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([emitenteNif, numero])
+  @@index([mes])
+}

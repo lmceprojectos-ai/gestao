@@ -134,7 +134,7 @@ export function areasForPath(pathname: string): AreaKey[] {
   if (starts("/faturas") || starts("/faturas-fixas-ignorar") || starts("/faturas-fixas-ok")) return ["clientes", "fornecedores"];
 
   if (starts("/clientes") || starts("/recebimentos")) return ["clientes"];
-  if (starts("/fornecedores") || starts("/pagamentos")) return ["fornecedores"];
+  if (starts("/fornecedores") || starts("/pagamentos") || starts("/efatura")) return ["fornecedores"];
   if (starts("/despesas") || starts("/impostos") || starts("/seguros") || starts("/vencimentos") || starts("/digitalizacoes") || starts("/ocr") || starts("/upload")) return ["documentos"];
   if (starts("/contas") || starts("/caixa") || starts("/transferencias") || starts("/importar-extrato") || starts("/movimentos-bancarios") || starts("/movimentos") || starts("/reconciliacao")) return ["bancos"];
   if (starts("/orcamentos-graficos") || starts("/grafica") || starts("/ifthenpay")) return ["orcamentos"];
