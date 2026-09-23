@@ -3,10 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "echo skip-build"
+    "postinstall": "echo skip-build",
+    "db:push": "prisma db push --skip-generate"
   },
   "prisma": {
     "seed": "tsx --require dotenv/config scripts/safe-seed.ts"

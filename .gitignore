@@ -36,3 +36,4 @@ docs/uploads-originais/
 # zips de deploy manual (cPanel) e artefactos de build — gerados localmente, não fazem parte do código
 *.zip
 /abacus/
+.env.production

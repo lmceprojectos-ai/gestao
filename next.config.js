@@ -8,6 +8,9 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   experimental: {
     outputFileTracingRoot: path.join(__dirname, '../'),
+    // O servidor (cPanel) tem 2 GB de memória: compilar com um só processo.
+    cpus: 1,
+    workerThreads: false,
   },
   eslint: {
     ignoreDuringBuilds: true,
