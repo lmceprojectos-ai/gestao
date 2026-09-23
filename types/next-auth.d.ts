@@ -1,0 +1,28 @@
+import { DefaultSession, DefaultUser } from 'next-auth';
+import { JWT } from 'next-auth/jwt';
+
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      role?: string;
+      pontoRole?: string | null;
+      // Add custom fields here
+    } & DefaultSession['user']; // includes name, email, image
+  }
+
+  interface User extends DefaultUser {
+    id: string;
+    role?: string;
+    pontoRole?: string | null;
+    // Mirror any fields added to Session['user'] above
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    role?: string;
+    pontoRole?: string | null;
+  }
+}

@@ -1,0 +1,961 @@
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x", "debian-openssl-3.0.x", "debian-openssl-1.0.x", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String? @db.Text
+  email         String    @unique
+  password      String @db.Text
+  role          String @db.VarChar(1024)    @default("admin")
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Coluna histórica (não utilizada na UI). O comprovativo de IBAN do
+  // colaborador é guardado como documento na ficha (ClientDocument category="iban").
+  iban          String? @db.Text
+
+  // --- Módulo Gestão de Ponto ---
+  active            Boolean  @default(true)
+  sendToAccounting  Boolean  @default(false)
+  partTime          Boolean  @default(false)
+  // Marca as contas que participam no módulo de ponto (colaboradores, ecrã QR,
+  // administradores do ponto). Distingue-as das contas exclusivas da Gestão.
+  isPontoUser       Boolean  @default(false)
+  // Perfil ORIGINAL no módulo de ponto (COLABORADOR/ADMIN/QR). Preserva a
+  // identidade do ponto mesmo quando a conta tem um perfil de Gestão diferente
+  // (ex.: um colaborador que também é administrador da Gestão). Null = deriva do perfil de Gestão.
+  pontoRole         String? @db.Text
+  // Permissões PERSONALIZADAS deste utilizador (JSON: área -> nível de acesso).
+  // Null = usar as permissões por defeito do perfil (role). Definidas pelo
+  // administrador na ficha de cada utilizador.
+  permissions       String? @db.Text
+  punches           TimeRecord[]
+  absences          Absence[]
+  vacations         VacationRequest[]
+  pontoResetTokens  PontoPasswordResetToken[]
+  payslips          Payslip[]
+  salaryProfile     SalaryProfile?
+  clientFile        ClientFile?
+  taskMisses        DailyTaskMiss[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model ContaBancaria {
+  id            String    @id @default(cuid())
+  nome          String @db.Text
+  banco         String @db.Text
+  iban          String? @db.Text
+  saldoInicial  Float     @default(0)
+  saldoAtual    Float     @default(0)
+  dataSaldoInicial DateTime?
+  ativa         Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  recebimentos  Recebimento[]
+  pagamentos    Pagamento[]
+  movimentos    MovimentoBancario[]
+  despesas      Despesa[]
+  caixaMovimentos CaixaMovimento[]
+}
+
+model Cliente {
+  id            String    @id @default(cuid())
+  nome          String @db.Text
+  nif           String?   @unique
+  email         String? @db.Text
+  telefone      String? @db.Text
+  morada        String? @db.Text
+  cidade        String? @db.Text
+  codigoPostal  String? @db.Text
+  website       String? @db.Text
+  contactoNome  String? @db.Text
+  contactoEmail String? @db.Text
+  contactoTel   String? @db.Text
+  redesSociais  String? @db.Text
+  notas         String? @db.Text
+  ativo         Boolean   @default(true)
+  moloniId      Int?      @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  recebimentos  Recebimento[]
+  faturas       Fatura[]
+}
+
+model Fornecedor {
+  id            String    @id @default(cuid())
+  nome          String @db.Text
+  nif           String?   @unique
+  email         String? @db.Text
+  telefone      String? @db.Text
+  morada        String? @db.Text
+  cidade        String? @db.Text
+  codigoPostal  String? @db.Text
+  website       String? @db.Text
+  contactoNome  String? @db.Text
+  contactoEmail String? @db.Text
+  contactoTel   String? @db.Text
+  notas         String? @db.Text
+  tipoFornecedor String? @db.Text  // desp_mensal, desp_pontual, servico, material, etc.
+  ativo         Boolean   @default(true)
+  moloniId      Int?      @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  pagamentos    Pagamento[]
+  faturas       Fatura[]
+  despesas      Despesa[]
+}
+
+model Recebimento {
+  id              String    @id @default(cuid())
+  descricao       String @db.Text
+  valor           Float
+  dataRecebimento DateTime
+  estado          String    @default("pendente")
+  metodoPagamento String? @db.Text
+  referencia      String? @db.Text
+  notas           String? @db.Text
+  clienteId       String?
+  cliente         Cliente?  @relation(fields: [clienteId], references: [id])
+  contaBancariaId String?
+  contaBancaria   ContaBancaria? @relation(fields: [contaBancariaId], references: [id])
+  reconciliado    Boolean   @default(false)
+  faturaId        String?
+  fatura          Fatura?   @relation(fields: [faturaId], references: [id])
+  movimentosBancarios MovimentoBancario[]
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([dataRecebimento])
+}
+
+model Pagamento {
+  id              String    @id @default(cuid())
+  descricao       String @db.Text
+  valor           Float
+  dataPagamento   DateTime
+  estado          String    @default("pendente")
+  metodoPagamento String? @db.Text
+  referencia      String? @db.Text
+  notas           String? @db.Text
+  reciboPath              String? @db.Text
+  reciboContentType       String? @db.Text
+  reciboOriginal          String? @db.Text
+  comprovativoPath        String? @db.Text
+  comprovativoContentType String? @db.Text
+  comprovativoOriginal    String? @db.Text
+  fornecedorId    String?
+  fornecedor      Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  contaBancariaId String?
+  contaBancaria   ContaBancaria? @relation(fields: [contaBancariaId], references: [id])
+  reconciliado    Boolean   @default(false)
+  faturaId        String?
+  fatura          Fatura?   @relation(fields: [faturaId], references: [id])
+  movimentosBancarios MovimentoBancario[]
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([dataPagamento])
+}
+
+model Fatura {
+  id                String    @id @default(cuid())
+  numero            String? @db.Text
+  descricao         String? @db.Text
+  tipo              String    @default("recebida")
+  origem            String?
+  valor             Float?
+  valorBruto        Float?
+  valorReconciliado Float?
+  impostos          Float?
+  estado            String?   @default("rascunho")
+  dataEmissao       DateTime?
+  dataVencimento    DateTime?
+  serieName         String? @db.Text
+  entidadeNome      String? @db.Text
+  entidadeNif       String? @db.Text
+  referencia        String? @db.Text
+  categoria         String? @db.VarChar(1024)   @default("outro")
+  cloudStoragePath  String @db.VarChar(1024)    @default("")
+  isPublic          Boolean   @default(false)
+  contentType       String @db.VarChar(1024)    @default("application/pdf")
+  nomeOriginal      String @db.VarChar(1024)    @default("")
+  versoPath         String? @db.Text
+  versoContentType  String? @db.Text
+  versoOriginal     String? @db.Text
+  comprovativoPath        String? @db.Text
+  comprovativoContentType String? @db.Text
+  comprovativoOriginal    String? @db.Text
+  formaPagamento    String? @db.Text
+  pagamentoValidado Boolean   @default(false)
+  dataValidacaoPagamento DateTime?
+  validadoPor       String? @db.Text
+  dataPagamento     DateTime?
+  mbEntidade        String? @db.Text
+  mbReferencia      String?
+  mbValor           Float?
+  mbOrderId         String?
+  mbRequestId       String?
+  mbGeradoEm        DateTime?
+  mbPagamentoData   DateTime?
+  mbwayOrderId      String?
+  mbwayRequestId    String?
+  mbwayEstado       String? @db.Text
+  mbwayTelemovel    String? @db.Text
+  mbwayIniciadoEm   DateTime?
+  clienteId         String?
+  cliente           Cliente?  @relation(fields: [clienteId], references: [id])
+  fornecedorId      String?
+  fornecedor        Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  // Nota de crédito/débito ligada à fatura que credita/debita (self-relation).
+  faturaRelacionadaId String?
+  faturaRelacionada   Fatura?  @relation("NotaCreditoFatura", fields: [faturaRelacionadaId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  notasCredito        Fatura[] @relation("NotaCreditoFatura")
+  recebimentos      Recebimento[]
+  pagamentos        Pagamento[]
+  moloniId          Int?      @unique
+  moloniDocType     String? @db.Text
+  moloniStatus      Int?
+  criadoPor         String? @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([tipo])
+  @@index([origem])
+  @@index([estado])
+  @@index([mbOrderId])
+  @@index([mbReferencia])
+  @@index([mbwayOrderId])
+}
+
+model Vencimento {
+  id              String    @id @default(cuid())
+  funcionario     String @db.Text
+  cargo           String? @db.Text
+  valorBruto      Float
+  valorLiquido    Float?
+  segSocial       Float?
+  irs             Float?
+  outrosDescontos Float?
+  periodo         String?   // e.g. "2026-07" (YYYY-MM)
+  dataPagamento   DateTime?
+  estado          String    @default("pendente")
+  notas           String? @db.Text
+  cloudStoragePath          String? @db.Text
+  contentType               String? @db.Text
+  nomeOriginal              String? @db.Text
+  comprovanteStoragePath    String? @db.Text
+  comprovanteContentType    String? @db.Text
+  comprovanteNomeOriginal   String? @db.Text
+  isPublic                  Boolean   @default(false)
+  criadoPor                 String? @db.Text
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([periodo])
+}
+
+model Imposto {
+  id              String    @id @default(cuid())
+  tipo            String    // IVA, IRC, IRS, SegSocial, IMI, IUC, etc.
+  descricao       String? @db.Text
+  valor           Float
+  periodo         String? @db.Text   // e.g. "2026-Q1", "2026-07"
+  dataVencimento  DateTime?
+  dataPagamento   DateTime?
+  estado          String    @default("pendente")
+  referencia      String? @db.Text
+  notas           String? @db.Text
+  entidadeNome    String? @db.Text
+  entidadeNif     String? @db.Text
+  cloudStoragePath String? @db.Text
+  contentType     String? @db.Text
+  nomeOriginal    String? @db.Text
+  isPublic        Boolean   @default(false)
+  comprovativoPath String? @db.Text
+  comprovativoContentType String? @db.Text
+  comprovativoOriginal String? @db.Text
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tipo])
+  @@index([estado])
+}
+
+model Seguro {
+  id              String    @id @default(cuid())
+  tipo            String    // recheio, vida, acidentes_trabalho, viaturas
+  descricao       String? @db.Text
+  seguradora      String? @db.Text
+  apolice         String? @db.Text
+  valor           Float
+  periodicidade   String? @db.Text   // mensal, trimestral, semestral, anual
+  dataInicio      DateTime?
+  dataVencimento  DateTime?
+  dataEmissao     DateTime?
+  dataPagamento   DateTime?
+  estado          String    @default("pendente")
+  referencia      String? @db.Text
+  notas           String? @db.Text
+  entidadeNome    String? @db.Text
+  entidadeNif     String? @db.Text
+  cloudStoragePath String? @db.Text
+  contentType     String? @db.Text
+  nomeOriginal    String? @db.Text
+  isPublic        Boolean   @default(false)
+  comprovativoPath String? @db.Text
+  comprovativoContentType String? @db.Text
+  comprovativoOriginal String? @db.Text
+  despesas        Despesa[]
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tipo])
+  @@index([estado])
+}
+
+model Despesa {
+  id              String    @id @default(cuid())
+  descricao       String @db.Text
+  categoria       String?   // material, serviços, transporte, alimentação, etc.
+  subcategoria    String? @db.Text
+  valor           Float
+  data            DateTime
+  estado          String    @default("pendente")
+  fornecedorId    String?
+  fornecedor      Fornecedor? @relation(fields: [fornecedorId], references: [id])
+  seguroId        String?
+  seguro          Seguro?   @relation(fields: [seguroId], references: [id])
+  entidadeNome    String? @db.Text
+  entidadeNif     String? @db.Text
+  metodoPagamento String? @db.Text
+  contaBancariaId String?
+  contaBancaria   ContaBancaria? @relation(fields: [contaBancariaId], references: [id])
+  notas           String? @db.Text
+  cloudStoragePath String? @db.Text
+  contentType     String? @db.Text
+  nomeOriginal    String? @db.Text
+  isPublic        Boolean   @default(false)
+  comprovativoPath String? @db.Text
+  comprovativoContentType String? @db.Text
+  comprovativoNomeOriginal String? @db.Text
+  comprovativosExtra Json?
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([categoria])
+  @@index([estado])
+  @@index([contaBancariaId])
+  @@index([seguroId])
+}
+
+model CaixaMovimento {
+  id              String    @id @default(cuid())
+  descricao       String @db.Text
+  valor           Float
+  data            DateTime
+  tipo            String    // entrada, saida
+  categoria       String? @db.Text   // venda, compra, troco, etc.
+  saldoApos       Float?    // balance after this movement
+  notas           String? @db.Text
+  contaBancariaId String?
+  contaBancaria   ContaBancaria? @relation(fields: [contaBancariaId], references: [id])
+  cloudStoragePath String? @db.Text
+  contentType     String? @db.Text
+  nomeOriginal    String? @db.Text
+  isPublic        Boolean   @default(false)
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tipo])
+  @@index([data])
+  @@index([contaBancariaId])
+}
+
+model TransferenciaInterna {
+  id              String    @id @default(cuid())
+  descricao       String? @db.Text
+  valor           Float
+  data            DateTime  @default(now())
+  contaOrigemId   String
+  contaDestinoId  String
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([contaOrigemId])
+  @@index([contaDestinoId])
+}
+
+model EmprestimoSocio {
+  id              String    @id @default(cuid())
+  socioNome       String @db.Text
+  descricao       String? @db.Text
+  valor           Float
+  dataEmprestimo  DateTime
+  estado          String    @default("ativo")  // ativo, devolvido, parcial
+  contaBancariaId String?
+  notas           String? @db.Text
+  cloudStoragePath String? @db.Text
+  contentType      String? @db.Text
+  nomeOriginal     String? @db.Text
+  devolucoes      DevolucaoEmprestimo[]
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([dataEmprestimo])
+}
+
+model DevolucaoEmprestimo {
+  id              String    @id @default(cuid())
+  emprestimoId    String
+  emprestimo      EmprestimoSocio @relation(fields: [emprestimoId], references: [id], onDelete: Cascade)
+  valor           Float
+  dataDevolucao   DateTime
+  descricao       String? @db.Text
+  contaBancariaId String?
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([emprestimoId])
+}
+
+model Categoria {
+  id        String   @id @default(cuid())
+  nome      String @db.Text
+  slug      String   @unique
+  cor       String @db.VarChar(1024)   @default("bg-gray-100 text-gray-700")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MovimentoBancario {
+  id              String    @id @default(cuid())
+  descricao       String @db.Text
+  valor           Float
+  dataMovimento   DateTime
+  tipo            String @db.Text
+  contaBancariaId String
+  contaBancaria   ContaBancaria @relation(fields: [contaBancariaId], references: [id])
+  reconciliado    Boolean   @default(false)
+  recebimentoId   String?
+  recebimento     Recebimento? @relation(fields: [recebimentoId], references: [id])
+  pagamentoId     String?
+  pagamento       Pagamento?   @relation(fields: [pagamentoId], references: [id])
+  criadoPor       String? @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([contaBancariaId])
+  @@index([dataMovimento])
+  @@index([recebimentoId])
+  @@index([pagamentoId])
+}
+
+model Configuracao {
+  id        String   @id @default(cuid())
+  grupo     String   // forma_pagamento, tipo_documento, estado
+  valor     String
+  label     String @db.Text
+  cor       String? @db.Text
+  ordem     Int      @default(0)
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([grupo, valor])
+  @@index([grupo])
+}
+model FaturaFixaConfirmacao {
+  id           String   @id @default(cuid())
+  fornecedor   String   // nome canónico do fornecedor fixo
+  ano          Int
+  mes          Int      // 0-indexado
+  faturaId     String?  // fatura digitalizada associada (opcional)
+  faturaNumero String? @db.Text  // número/descrição da fatura (snapshot p/ apresentação)
+  notas        String? @db.Text
+  criadoPor    String? @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([ano, mes])
+  @@index([fornecedor, ano, mes])
+}
+
+model FaturaFixaIgnorada {
+  id         String   @id @default(cuid())
+  tipo       String   // 'fatura' | 'despesa' | 'imposto'
+  docId      String
+  fornecedor String   // nome canónico do fornecedor fixo
+  ano        Int
+  mes        Int      // 0-indexado
+  criadoPor  String? @db.Text
+  createdAt  DateTime @default(now())
+
+  @@unique([tipo, docId, fornecedor])
+  @@index([ano, mes])
+}
+
+model OrcamentoGrafico {
+  id            String   @id @default(cuid())
+  numero        Int      @unique @default(autoincrement())
+  tipoOrcamento String   @default("OC")
+  numeroTipo    Int?
+  clienteId     String?
+  clienteNome   String? @db.Text
+  clienteEmpresa String? @db.Text
+  clienteContacto String? @db.Text
+  clienteNif    String? @db.Text
+  clienteEmail  String? @db.Text
+  clienteTelefone String? @db.Text
+  clienteMorada String? @db.Text
+  clienteCodigoPostal String? @db.Text
+  clienteCidade String? @db.Text
+  produto       String   @default("cartoes")
+  especificacoes Json
+  acabamentos   Json
+  quantidade    Int
+  tipoCliente   String @db.VarChar(1024)   @default("novo")
+  entrega24h    Boolean  @default(false)
+  descontoManual Float?
+  portesEnvio   Float?
+  tipoPortes    String? @db.VarChar(1024)  @default("levantamento")
+  deslocacao    Json?
+  arteFinalModo String? @db.VarChar(1024)  @default("cliente")
+  arteFinalValor Float?
+  arteFinalFicheiro String? @db.Text
+  arteFinalNome String? @db.Text
+  opcoesExtra   Json?
+  anexos        Json?
+  envios        Json?
+  custoTotal    Float
+  margem        Float
+  precoSemIva   Float
+  precoComIva   Float
+  precoUnitario Float
+  breakdown     Json
+  tabelaPrecos  Json
+  itens         Json?
+  estado        String   @default("pendente")
+  folhaObra     String?
+  notas         String? @db.Text
+  prazoProducao String? @db.Text
+  moloniDocId   String?
+  pdfPublicPath String? @db.Text
+  mbEntidade    String? @db.Text
+  mbReferencia  String? @db.Text
+  mbValor       Float?
+  percentagemAdjudicacao Int?
+  criadoPor     String? @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([estado])
+  @@index([produto])
+  @@index([tipoOrcamento])
+  @@index([folhaObra])
+  @@index([createdAt])
+}
+
+model ConfiguracaoGrafica {
+  id        String   @id @default(cuid())
+  chave     String   @unique @default("default")
+  dados     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model DocumentoIrs {
+  id               String   @id @default(cuid())
+  userId           String
+  ano              Int
+  descricao        String? @db.Text
+  cloudStoragePath String? @db.Text
+  contentType      String? @db.Text
+  nomeOriginal     String? @db.Text
+  categoria        String? @db.Text
+  entidadeNome     String? @db.Text
+  valor            Float?
+  dataDocumento    DateTime?
+  isPublic         Boolean  @default(false)
+  criadoPor        String? @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@index([ano])
+}
+
+model PerfilFuncionario {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  nomeCompleto          String? @db.Text
+  numero                String? @db.Text
+  email                 String? @db.Text
+  morada                String? @db.Text
+  dataNascimento        DateTime?
+  funcionarioVencimento String? @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model DocumentoIdentificacao {
+  id               String   @id @default(cuid())
+  userId           String
+  tipo             String   // 'cartao_cidadao' | 'carta_conducao'
+  lado             String   // 'frente' | 'verso'
+  cloudStoragePath String? @db.Text
+  contentType      String? @db.Text
+  nomeOriginal     String? @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, tipo, lado])
+  @@index([userId])
+}
+
+model DigitalizacaoImportada {
+  id               String    @id @default(cuid())
+  driveItemId      String    @unique
+  etag             String? @db.Text
+  pasta            String    // DESPESAS, FORNECEDORES, IMPOSTOS, SEGUROS, VENCIMENTOS
+  modulo           String @db.Text    // despesa, pagamento, imposto, seguro, vencimento
+  nomeOriginal     String @db.Text
+  contentType      String? @db.Text
+  cloudStoragePath String? @db.Text
+  isPublic         Boolean   @default(false)
+  onedriveModified DateTime?
+  dadosExtraidos   Json?
+  estado           String    @default("por_confirmar") // por_confirmar, confirmado, ignorado, duplicado, erro
+  erroMsg          String? @db.Text
+  duplicadoDeId    String?
+  registoCriadoId  String?
+  criadoPor        String? @db.Text
+  confirmadoPor    String? @db.Text
+  confirmadoEm     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([pasta])
+}
+
+// ===================== MÓDULO GESTÃO DE PONTO =====================
+
+enum PunchType {
+  ENTRADA
+  SAIDA_ALMOCO
+  REGRESSO_ALMOCO
+  SAIDA_FINAL
+  HORA_EXTRA
+}
+
+enum AbsenceStatus {
+  POR_JUSTIFICAR
+  EM_ANALISE
+  JUSTIFICADA
+  INJUSTIFICADA
+}
+
+enum VacationStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+}
+
+model PontoPasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model TimeRecord {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         PunchType
+  timestamp    DateTime   @default(now())
+  workDate     String
+  ipAddress    String? @db.Text
+  device       String? @db.Text
+  lateMinutes  Int        @default(0)
+  extraMinutes Int        @default(0)
+  correctedBy  String? @db.Text
+  note         String? @db.Text
+  delayReason  String? @db.Text
+  createdAt    DateTime   @default(now())
+
+  @@index([userId, workDate])
+  @@index([workDate])
+}
+
+model Absence {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  absenceDate    String
+  status         AbsenceStatus @default(POR_JUSTIFICAR)
+  reason         String? @db.Text
+  observation    String? @db.Text
+  attachmentPath String? @db.Text
+  attachmentName String? @db.Text
+  attachmentPublic Boolean     @default(false)
+  decisionNote   String? @db.Text
+  decidedBy      String? @db.Text
+  decidedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([absenceDate])
+}
+
+// Registo de dias em que um colaborador NÃO cumpriu as tarefas diárias.
+// Marcado pelo administrador no calendário do controlo de ponto. Se um
+// colaborador ultrapassar o máximo permitido de dias sem tarefas feitas num
+// mês, perde o direito ao prémio de assiduidade desse mês.
+model DailyTaskMiss {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missDate  String   // "AAAA-MM-DD"
+  note      String? @db.Text
+  markedBy  String? @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, missDate])
+  @@index([userId])
+  @@index([missDate])
+}
+
+model AllowedIp {
+  id        String   @id @default(cuid())
+  address   String   @unique
+  label     String? @db.Text
+  createdAt DateTime @default(now())
+}
+
+model VacationRequest {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startDate    String
+  endDate      String @db.Text
+  days         Int            @default(0)
+  reason       String? @db.Text
+  status       VacationStatus @default(PENDENTE)
+  decisionNote String? @db.Text
+  decidedBy    String? @db.Text
+  decidedAt    DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model ClientFile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String? @db.Text
+  address   String? @db.Text
+  phone     String? @db.Text
+  nif       String? @db.Text
+  notes     String? @db.Text
+  documents ClientDocument[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClientDocument {
+  id                 String     @id @default(cuid())
+  clientFileId       String
+  clientFile         ClientFile @relation(fields: [clientFileId], references: [id], onDelete: Cascade)
+  label              String? @db.Text
+  category           String? @db.Text
+  side               String? @db.Text
+  cloud_storage_path String @db.Text
+  fileName           String @db.Text
+  contentType        String @db.VarChar(1024)     @default("application/octet-stream")
+  uploadedBy         String @db.Text
+  createdAt          DateTime   @default(now())
+
+  @@index([clientFileId])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+model Payslip {
+  id              String   @id @default(cuid())
+  month           String
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  employeeNumber  String? @db.Text
+  name            String
+  category        String? @db.Text
+  salarioBase     Float    @default(0)
+  vencimentoBase  Float    @default(0)
+  subsAlimentacao Float    @default(0)
+  subsFerias      Float    @default(0)
+  subsNatal       Float    @default(0)
+  outrosAbonos    Float    @default(0)
+  totalFaltas     Float    @default(0)
+  segSocial       Float    @default(0)
+  irs             Float    @default(0)
+  outrosDescontos Float    @default(0)
+  totalIliquido   Float    @default(0)
+  totalDescontos  Float    @default(0)
+  liquido         Float    @default(0)
+  workingDays     Int      @default(0)
+  daysWorked      Int      @default(0)
+  absJustDays     Int      @default(0)
+  absInjustDays   Int      @default(0)
+  feriasDays      Int      @default(0)
+  premioAssiduidade Float  @default(0)
+  premioQualificado Boolean @default(false)
+  autoGenerated   Boolean  @default(true)
+  breakdown       Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([month, name])
+  @@index([month])
+  @@index([userId])
+}
+
+model SalaryProfile {
+  id             String   @id @default(cuid())
+  userId         String?  @unique
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name           String   @unique
+  employeeNumber String? @db.Text
+  category       String? @db.Text
+  vencimentoBase Float    @default(0)
+  periodRate     Float    @default(0)
+  mealPerDay     Float    @default(0)
+  subsFerias     Float    @default(0)
+  subsNatal      Float    @default(0)
+  ssRate         Float    @default(0.11)
+  irsRate        Float    @default(0)
+  nif            String? @db.Text
+  numSegSocial   String? @db.Text
+  morada         String? @db.Text
+  refMonth       String? @db.Text
+  refData        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model SocialPost {
+  id            String    @id @default(cuid())
+  titulo        String @db.Text
+  plataformas   String @db.VarChar(1024)    @default("facebook")   // lista separada por vírgula: facebook,instagram,tiktok,youtube_shorts
+  tipo          String    @default("publicacao")  // publicacao | anuncio
+  formato       String @db.VarChar(1024)    @default("imagem")      // imagem | video
+  texto         String? @db.Text
+  imagemPath    String? @db.Text
+  imagemUrl     String? @db.Text
+  imagemContentType String? @db.Text
+  videoPath     String? @db.Text
+  videoUrl      String? @db.Text
+  videoContentType String? @db.Text
+  roteiro       Json?      // guião do short (cenas: texto + descrição de imagem)
+  estado        String    @default("rascunho")    // rascunho | agendado | publicado | cancelado
+  agendadoEm    DateTime?
+  publicadoEm   DateTime?
+  promptTexto   String? @db.Text
+  promptImagem  String? @db.Text
+  referencias   Json?      // imagens de exemplo enviadas pelo utilizador (paths/urls)
+  conteudoPlataformas Json?  // conteúdo específico por plataforma: { facebook: {...}, instagram: {...}, tiktok: {...}, youtube_shorts: {...} }
+  briefIa       String? @db.Text    // pedido em texto livre do utilizador para a geração assistida por IA
+  notas         String? @db.Text
+  campanhaId    String?
+  criadoPor     String? @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([agendadoEm])
+  @@index([tipo])
+  @@index([campanhaId])
+}
+
+model SocialConnection {
+  id           String    @id @default(cuid())
+  plataforma   String    @unique  // facebook | instagram | tiktok | youtube_shorts
+  credenciais  Json?     // credenciais fornecidas pelo utilizador (tokens, ids, etc.)
+  ligado       Boolean   @default(false)
+  verificadoEm DateTime?
+  ultimoErro   String? @db.Text
+  contaNome    String? @db.Text   // nome/identificação da conta devolvida pela verificação
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model SocialCampaign {
+  id            String    @id @default(cuid())
+  nome          String @db.Text
+  objetivo      String? @db.Text    // notoriedade | trafego | vendas | interacao | leads
+  plataformas   String @db.VarChar(1024)    @default("facebook")
+  estado        String    @default("planeada")    // planeada | ativa | pausada | concluida
+  orcamento     Float?     // orçamento total previsto (EUR)
+  gastoAtual    Float?     @default(0)  // gasto acumulado (EUR)
+  inicio        DateTime?
+  fim           DateTime?
+  impressoes    Int?       @default(0)
+  alcance       Int?       @default(0)
+  cliques       Int?       @default(0)
+  conversoes    Int?       @default(0)
+  notas         String? @db.Text
+  criadoPor     String? @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([estado])
+}
