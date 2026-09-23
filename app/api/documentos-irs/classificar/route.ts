@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { iaConfigurada, perguntarIA } from '@/lib/ai';
 
 // Classifica automaticamente um documento de IRS numa categoria conhecida,
 // usando o modelo de visão. Recebe o ficheiro em base64.
@@ -114,30 +115,6 @@ function normalizarValor(raw: unknown): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
 }
 
-async function chamarModelo(model: string, prompt: string, isPdf: boolean, contentType: string, base64: string, fileName: string, apiKey: string) {
-  return fetch('https://apps.abacus.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            isPdf
-              ? { type: 'file', file: { filename: fileName || 'documento.pdf', file_data: `data:application/pdf;base64,${base64}` } }
-              : { type: 'image_url', image_url: { url: `data:${contentType};base64,${base64}`, detail: 'high' } },
-          ],
-        },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-      max_tokens: 900,
-    }),
-  });
-}
-
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -174,35 +151,26 @@ Regras de precisão (segue-as rigorosamente):
 - Nunca inventes dados: quando a categoria, nome, valor ou data não forem legíveis com confiança, devolve null nesse campo (exceto categoria, que nesse caso é "outro").
 - A descrição deve ser curta (máx. 8 palavras), em português, e refletir o tipo de despesa (ex.: "Fatura de farmácia", "Consulta de medicina dentária").`;
 
-    const apiKey = process.env.ABACUSAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'API key não configurada' }, { status: 500 });
+    if (!iaConfigurada()) return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
 
-    // Deteta a falta de créditos do serviço de IA para devolver uma mensagem clara.
-    const semCreditos = (txt: string) => /no remaining credits|insufficient credits|quota/i.test(txt || '');
-    const MSG_SEM_CREDITOS = 'A análise automática está temporariamente indisponível por falta de créditos do serviço de inteligência artificial. Pode preencher os dados manualmente (categoria, entidade, valor e data) e guardar o documento normalmente.';
+    // Deteta a falta de saldo do serviço de IA para devolver uma mensagem clara.
+    const semCreditos = (txt: string) => /credit balance|insufficient|quota/i.test(txt || '');
+    const MSG_SEM_CREDITOS = 'A análise automática está temporariamente indisponível por falta de saldo do serviço de inteligência artificial. Pode preencher os dados manualmente (categoria, entidade, valor e data) e guardar o documento normalmente.';
 
-    // Tenta com o modelo principal; em caso de falha de rede/servidor, tenta um modelo alternativo.
-    let response = await chamarModelo('gemini-3.1-pro-preview', prompt, isPdf, contentType, base64, fileName, apiKey);
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Classificar LLM error (principal):', response.status, errText);
-      if (semCreditos(errText)) {
+    let content: string;
+    try {
+      content = await perguntarIA({
+        prompt,
+        anexos: [isPdf ? { tipo: 'pdf', base64 } : { tipo: 'imagem', base64, mediaType: contentType }],
+      });
+    } catch (e: any) {
+      console.error('Classificar LLM error:', e?.message);
+      if (semCreditos(e?.message)) {
         return NextResponse.json({ error: MSG_SEM_CREDITOS, semCreditos: true }, { status: 503 });
       }
-      // Retry legítimo com modelo alternativo
-      response = await chamarModelo('gemini-3.5-flash', prompt, isPdf, contentType, base64, fileName, apiKey);
-      if (!response.ok) {
-        const errText2 = await response.text();
-        console.error('Classificar LLM error (alternativo):', response.status, errText2);
-        if (semCreditos(errText2)) {
-          return NextResponse.json({ error: MSG_SEM_CREDITOS, semCreditos: true }, { status: 503 });
-        }
-        return NextResponse.json({ error: 'Não foi possível analisar o documento' }, { status: 502 });
-      }
+      return NextResponse.json({ error: 'Não foi possível analisar o documento' }, { status: 502 });
     }
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
     const parsed = content ? parseJsonFromLlm(content) : null;
     if (!parsed) return NextResponse.json({ error: 'A análise não devolveu dados válidos' }, { status: 422 });
 

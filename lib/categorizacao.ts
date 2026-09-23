@@ -8,6 +8,7 @@
 //      significado de "Desp. Mensais" (despesas recorrentes/subscrições).
 //   3) 'outro' — quando nada permite decidir com confiança.
 import { prisma } from '@/lib/db';
+import { iaConfigurada, perguntarIA } from '@/lib/ai';
 
 export interface DadosClassificacao {
   nif?: string | null;
@@ -120,8 +121,7 @@ export function categoriaPorRegras(dados: DadosClassificacao): string | null {
 
 // 2) Classificação por IA para fornecedores novos.
 export async function categoriaPorIA(dados: DadosClassificacao): Promise<string | null> {
-  const apiKey = process.env.ABACUSAI_API_KEY;
-  if (!apiKey) return null;
+  if (!iaConfigurada()) return null;
 
   // Carrega as categorias existentes para o modelo escolher um slug válido.
   const cats = await prisma.categoria.findMany({ select: { slug: true, nome: true } });
@@ -153,21 +153,7 @@ Orientação importante:
 Responde apenas com o JSON.`;
 
   try {
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4.1-mini',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        temperature: 0,
-        max_tokens: 50,
-      }),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (!content) return null;
+    const content = await perguntarIA({ prompt, maxTokens: 4000 });
     let slug: string | null = null;
     try {
       const obj = JSON.parse(content);

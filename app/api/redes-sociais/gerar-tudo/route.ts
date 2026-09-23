@@ -3,6 +3,7 @@ export const maxDuration = 120;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSocialAccess } from '@/lib/social/guard';
+import { Anexo, iaConfigurada, perguntarIA } from '@/lib/ai';
 
 function parseJson(raw: string): any | null {
   if (!raw) return null;
@@ -56,8 +57,7 @@ export async function POST(req: NextRequest) {
     if (!brief) return NextResponse.json({ error: 'Descreva o que pretende para a publicação' }, { status: 400 });
     if (plataformas.length === 0) return NextResponse.json({ error: 'Escolha pelo menos uma plataforma' }, { status: 400 });
 
-    const apiKey = process.env.ABACUSAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
+    if (!iaConfigurada()) return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
 
     const esquemas = plataformas.map(esquemaPlataforma).filter(Boolean).join(',\n  ');
 
@@ -86,28 +86,18 @@ Responde APENAS em JSON puro com esta estrutura (inclui SOMENTE as plataformas p
 }
 Sem markdown, sem texto fora do JSON.`;
 
-    const content: any[] = [{ type: 'text', text: prompt }];
+    const anexos: Anexo[] = [];
     for (const url of imagens) {
-      content.push({ type: 'image_url', image_url: { url } });
+      anexos.push({ tipo: 'imagem_url', url });
     }
 
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gemini-3.5-flash',
-        messages: [{ role: 'user', content }],
-        response_format: { type: 'json_object' },
-        max_tokens: 4000,
-      }),
-    });
-    if (!response.ok) {
-      const t = await response.text();
-      console.error('gerar-tudo LLM error:', t);
+    let raw: string;
+    try {
+      raw = await perguntarIA({ prompt, anexos, maxTokens: 16000 });
+    } catch (e: any) {
+      console.error('gerar-tudo LLM error:', e?.message);
       return NextResponse.json({ error: 'Erro ao gerar o conteúdo com IA' }, { status: 502 });
     }
-    const data = await response.json();
-    const raw = data?.choices?.[0]?.message?.content;
     const parsed = parseJson(raw || '');
     if (!parsed) return NextResponse.json({ error: 'Não foi possível interpretar a resposta da IA' }, { status: 502 });
 

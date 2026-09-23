@@ -4,6 +4,7 @@ export const maxDuration = 300;
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { iaConfigurada, perguntarIA } from '@/lib/ai';
 import * as XLSX from 'xlsx';
 
 // Convert a single XLSX cell into a string, choosing the right source per type:
@@ -134,8 +135,7 @@ export async function POST(req: NextRequest) {
       }
     } else if (fileName.endsWith('.pdf')) {
       // Parse PDF using LLM API
-      const apiKey = process.env.ABACUSAI_API_KEY;
-      if (!apiKey) {
+      if (!iaConfigurada()) {
         return NextResponse.json({ error: 'API key não configurada para processar PDF' }, { status: 500 });
       }
 
@@ -165,50 +165,15 @@ Regras:
 - Ignora linhas de cabeçalho, totais, ou informações da conta
 - Devolve APENAS o JSON, sem texto adicional`;
 
-      const llmResponse = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gemini-3.5-flash',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'file',
-                  file: {
-                    filename: file.name,
-                    file_data: `data:application/pdf;base64,${base64}`,
-                  },
-                },
-                { type: 'text', text: prompt },
-              ],
-            },
-          ],
-          response_format: { type: 'json_object' },
-          max_tokens: 32000,
-        }),
-      });
-
-      if (!llmResponse.ok) {
-        const errText = await llmResponse.text();
-        console.error('LLM API error for PDF:', errText);
-        const snippet = (errText || '').slice(0, 300);
+      let content: string;
+      try {
+        content = await perguntarIA({ prompt, anexos: [{ tipo: 'pdf', base64 }], maxTokens: 64000 });
+      } catch (e: any) {
+        console.error('LLM API error for PDF:', e?.message);
         return NextResponse.json(
-          { error: `Erro ao processar o PDF (resposta ${llmResponse.status} do serviço de IA)${snippet ? `: ${snippet}` : ''}` },
+          { error: `Erro ao processar o PDF no serviço de IA: ${e?.message || 'erro desconhecido'}` },
           { status: 502 },
         );
-      }
-
-      const llmData = await llmResponse.json();
-      const content = llmData?.choices?.[0]?.message?.content;
-
-      if (!content) {
-        console.error('Empty PDF LLM response:', JSON.stringify(llmData).slice(0, 500));
-        return NextResponse.json({ error: 'O serviço de IA não devolveu qualquer conteúdo ao processar o PDF. Tente novamente.' }, { status: 502 });
       }
 
       let parsed: any = extractJsonObject(content);

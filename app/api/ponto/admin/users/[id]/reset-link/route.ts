@@ -36,7 +36,7 @@ export async function POST(
       data: { token, userId: user.id, expiresAt },
     });
 
-    const appUrl = process.env.NEXTAUTH_URL || "https://app.abacusai.app";
+    const appUrl = process.env.NEXTAUTH_URL || "https://app.kh4.pt";
     const link = `${appUrl}/ponto/redefinir-senha?token=${token}`;
 
     return NextResponse.json({

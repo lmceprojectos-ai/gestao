@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSocialAccess } from '@/lib/social/guard';
+import { iaConfigurada, perguntarIA } from '@/lib/ai';
 
 function parseJson(raw: string): any | null {
   if (!raw) return null;
@@ -30,8 +31,7 @@ export async function POST(req: NextRequest) {
     const detalhes: string = (body.detalhes || '').trim();
     const empresa: string = body.empresa || 'KH4 3D';
 
-    const apiKey = process.env.ABACUSAI_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
+    if (!iaConfigurada()) return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
 
     const prompt = `És um gestor de redes sociais profissional para a empresa "${empresa}".
 Escreve em português europeu (Portugal), com tom ${tom}.
@@ -57,24 +57,13 @@ Responde APENAS em JSON puro com esta estrutura:
 }
 Sem markdown, sem texto fora do JSON.`;
 
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-5.4',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        temperature: 0.8,
-        max_tokens: 1500,
-      }),
-    });
-    if (!response.ok) {
-      const t = await response.text();
-      console.error('LLM texto error:', t);
+    let content: string;
+    try {
+      content = await perguntarIA({ prompt, maxTokens: 16000 });
+    } catch (e: any) {
+      console.error('LLM texto error:', e?.message);
       return NextResponse.json({ error: 'Erro ao gerar o texto' }, { status: 500 });
     }
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
     const parsed = parseJson(content || '');
     if (!parsed) return NextResponse.json({ error: 'Não foi possível interpretar a resposta da IA' }, { status: 500 });
     return NextResponse.json({ success: true, data: parsed });

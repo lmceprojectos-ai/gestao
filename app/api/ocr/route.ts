@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { iaConfigurada, perguntarIA } from '@/lib/ai';
 
 /**
  * Extrai de forma robusta um objeto JSON da resposta do modelo.
@@ -135,53 +136,19 @@ IMPORTANTE: Devolve APENAS o JSON, sem qualquer texto adicional.`;
     // Regras de precisão comuns a todos os tipos de documento
     prompt += `\n\nREGRAS DE PRECISÃO (muito importante):\n- Lê os números com máxima atenção. Em Portugal usa-se a VÍRGULA como separador decimal e o PONTO como separador de milhares (ex.: "1.234,56" corresponde a 1234.56; "12.500" corresponde a 12500). Devolve SEMPRE os valores como número decimal com ponto (ex.: 1234.56), sem símbolo de euro nem separador de milhares.\n- Distingue bem dígitos parecidos: 0/O, 1/7, 5/6/8, 3/8.\n- Se a fotografia estiver inclinada, com sombras, reflexos ou ligeiramente desfocada, analisa cuidadosamente e usa o contexto (etiquetas dos campos) para confirmar cada valor.\n- NUNCA inventes valores. Se não conseguires ler um campo com confiança, devolve null nesse campo.\n- As datas devem estar sempre no formato YYYY-MM-DD.`;
 
-    const apiKey = process.env.ABACUSAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 });
+    if (!iaConfigurada()) {
+      return NextResponse.json({ error: 'Serviço de IA não configurado' }, { status: 500 });
     }
 
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gemini-3.1-pro-preview',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              isPdf
-                ? {
-                    type: 'file',
-                    file: { filename: file.name || 'documento.pdf', file_data: `data:application/pdf;base64,${base64}` },
-                  }
-                : {
-                    type: 'image_url',
-                    image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' },
-                  },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('LLM API error:', errText);
+    let content: string;
+    try {
+      content = await perguntarIA({
+        prompt,
+        anexos: [isPdf ? { tipo: 'pdf', base64 } : { tipo: 'imagem', base64, mediaType: mimeType }],
+      });
+    } catch (e: any) {
+      console.error('LLM API error:', e?.message);
       return NextResponse.json({ error: 'Erro ao processar imagem' }, { status: 500 });
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return NextResponse.json({ error: 'Sem resposta da IA' }, { status: 500 });
     }
 
     const parsed = parseJsonFromLlm(content);

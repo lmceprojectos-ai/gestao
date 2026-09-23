@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/ponto/admin-guard";
+import { iaConfigurada, perguntarIA } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,8 +12,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: guard.message }, { status: guard.status });
 
   try {
-    const apiKey = process.env.ABACUSAI_API_KEY;
-    if (!apiKey) {
+    if (!iaConfigurada()) {
       return NextResponse.json(
         { message: "Serviço de leitura indisponível (chave em falta)." },
         { status: 500 }
@@ -59,45 +59,16 @@ Responde APENAS com JSON puro, sem markdown nem texto adicional, com esta estrut
   ]
 }`;
 
-    const llmRes = await fetch("https://apps.abacus.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-5.4-mini",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "file",
-                file: {
-                  filename: "recibos.pdf",
-                  file_data: `data:application/pdf;base64,${base64}`,
-                },
-              },
-              { type: "text", text: instructions },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!llmRes.ok) {
-      const t = await llmRes.text().catch(() => "");
-      console.error("Erro do serviço de leitura de PDF:", llmRes.status, t);
+    let content = "";
+    try {
+      content = await perguntarIA({ prompt: instructions, anexos: [{ tipo: "pdf", base64 }] });
+    } catch (e: any) {
+      console.error("Erro do serviço de leitura de PDF:", e?.message);
       return NextResponse.json(
         { message: "Não foi possível ler o PDF. Tente novamente ou insira os valores manualmente." },
         { status: 502 }
       );
     }
-
-    const data = await llmRes.json();
-    const content = data?.choices?.[0]?.message?.content ?? "";
     let parsed: any;
     try {
       const clean = String(content).replace(/```json/gi, "").replace(/```/g, "").trim();

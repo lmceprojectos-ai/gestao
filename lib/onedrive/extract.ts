@@ -1,5 +1,6 @@
 // Extração de dados estruturados a partir de documentos digitalizados, por módulo,
-// usando o modelo de visão (gemini-3.1-pro-preview) via API Abacus.
+// usando a IA (Claude) — ver lib/ai.ts.
+import { Anexo, iaConfigurada, perguntarIA } from '@/lib/ai';
 
 export function parseJsonFromLlm(raw: string): any | null {
   if (!raw || typeof raw !== 'string') return null;
@@ -158,8 +159,7 @@ export async function extractDados(
   const spec = MODULO_SPEC[modulo];
   if (!spec) return { dados: null, erro: `Módulo desconhecido: ${modulo}` };
 
-  const apiKey = process.env.ABACUSAI_API_KEY;
-  if (!apiKey) return { dados: null, erro: 'API key não configurada' };
+  if (!iaConfigurada()) return { dados: null, erro: 'Serviço de IA não configurado' };
 
   const prompt = `És um assistente que extrai dados de documentos financeiros portugueses.
 ${spec.intro}
@@ -176,46 +176,15 @@ Regras de precisão:
 
   const pdf = isPdf(contentType, fileName);
   const base64 = buffer.toString('base64');
-  const contentPart = pdf
-    ? {
-        type: 'file',
-        file: {
-          filename: fileName || 'documento.pdf',
-          file_data: `data:application/pdf;base64,${base64}`,
-        },
-      }
-    : {
-        type: 'image_url',
-        image_url: {
-          url: `data:${normalizeImageType(contentType, fileName)};base64,${base64}`,
-          detail: 'high',
-        },
-      };
+  const imageType = normalizeImageType(contentType, fileName);
+  if (!pdf && imageType === 'image/tiff') {
+    return { dados: null, erro: 'Formato TIFF não suportado pela IA — digitalize em PDF ou JPEG' };
+  }
+  const anexo: Anexo = pdf ? { tipo: 'pdf', base64 } : { tipo: 'imagem', base64, mediaType: imageType };
 
   try {
-    const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gemini-3.1-pro-preview',
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: prompt }, contentPart],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1,
-        max_tokens: 900,
-      }),
-    });
-    if (!response.ok) {
-      const errText = await response.text();
-      return { dados: null, erro: `LLM ${response.status}: ${errText.slice(0, 200)}` };
-    }
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    const parsed = content ? parseJsonFromLlm(content) : null;
+    const content = await perguntarIA({ prompt, anexos: [anexo] });
+    const parsed = parseJsonFromLlm(content);
     if (!parsed) return { dados: null, erro: 'A análise não devolveu dados válidos' };
     return { dados: parsed };
   } catch (e: any) {
