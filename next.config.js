@@ -11,6 +11,8 @@ const nextConfig = {
     // O servidor (cPanel) tem 2 GB de memória: compilar com um só processo.
     cpus: 1,
     workerThreads: false,
+    // Compilador SWC em WebAssembly: o binário nativo excede o limite de memória virtual do servidor.
+    useWasmBinary: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
