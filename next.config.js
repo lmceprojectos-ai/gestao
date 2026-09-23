@@ -11,17 +11,18 @@ const nextConfig = {
     // O servidor (cPanel) tem 2 GB de memória: compilar com um só processo.
     cpus: 1,
     workerThreads: false,
-    // Compilador SWC em WebAssembly: o binário nativo excede o limite de memória virtual do servidor.
-    useWasmBinary: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: false,
+    // NEXT_SKIP_TYPECHECK=1 salta a verificação de tipos (máquina de compilação com pouca memória).
+    ignoreBuildErrors: !!process.env.NEXT_SKIP_TYPECHECK,
   },
   images: { unoptimized: true },
   webpack: (config, { dev, isServer }) => {
+    // Pouco espaço em disco na máquina de compilação: sem cache persistente do webpack.
+    if (process.env.NEXT_NO_WEBPACK_CACHE) config.cache = false;
     if (!isServer) {
       // Content hashes only exist in a production compilation. `next dev` builds chunks on
       // demand, so [contenthash] resolves to undefined and the browser requests

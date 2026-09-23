@@ -37,3 +37,4 @@ docs/uploads-originais/
 *.zip
 /abacus/
 .env.production
+next-build.zip
