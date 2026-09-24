@@ -30,22 +30,25 @@ import {
   EyeOff,
   ShieldCheck,
   Printer,
+  Bell,
+  CalendarClock,
+  FileSearch,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { DateRangeFilter, dateInRange, rangeLabel, type DateRange } from '@/components/date-range-filter';
-import { EstadoBadge } from '@/components/estado-badge';
 import { FilePreviewFrame } from '@/components/file-preview-frame';
 import dynamic from 'next/dynamic';
 
-const FluxoChart = dynamic(() => import('./fluxo-chart'), { ssr: false, loading: () => <div className="h-64 bg-muted rounded-xl animate-pulse" /> });
+const MensalChart = dynamic(() => import('./mensal-chart'), { ssr: false, loading: () => <div className="h-64 bg-muted rounded-xl animate-pulse" /> });
 
 export function DashboardClient() {
   const { data: session } = useSession() || {};
   const role = (session?.user as any)?.role || '';
   const isInsercao = role === 'insercao';
   const [data, setData] = useState<any>(null);
+  const [atencao, setAtencao] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [okBusy, setOkBusy] = useState<string | null>(null);
   const [okModal, setOkModal] = useState<{ fornecedor: string; ano: number; mes: number; label: string; confirmacaoId?: string; seguros?: any[] } | null>(null);
@@ -112,6 +115,11 @@ export function DashboardClient() {
   };
 
   const loadData = () => {
+    // Os alertas carregam em paralelo e não atrasam o resto do painel.
+    fetch('/api/dashboard/atencao')
+      .then((r) => r.json())
+      .then((d: any) => setAtencao(d?.error ? null : d))
+      .catch(console.error);
     return fetch('/api/dashboard')
       .then((r) => r.json())
       .then((d: any) => setData(d))
@@ -255,96 +263,243 @@ export function DashboardClient() {
     );
   }
 
-  const CATEGORIAS: Record<string, string> = { material: 'Material', servicos: 'Serviços', renda: 'Renda', comunicacoes: 'Comunicações', transportes: 'Transportes', seguros: 'Seguros', manutencao: 'Manutenção', marketing: 'Marketing', outro: 'Outro' };
+  const CATEGORIAS: Record<string, string> = { material: 'Material', servicos: 'Serviços', renda: 'Renda', comunicacoes: 'Comunicações', transportes: 'Transportes', seguros: 'Seguros', manutencao: 'Manutenção', marketing: 'Marketing', financeiras: 'Desp. mensais', fornecedores: 'Fornecedores', combustiveis: 'Combustíveis', despesas_gerais: 'Despesas gerais', imobilizado: 'Imobilizado', outro: 'Outro' };
+  const TIPO_AGENDA: Record<string, string> = { fatura: 'Fatura', imposto: 'Imposto', seguro: 'Seguro', vencimento: 'Vencimento', pagamento: 'Pagamento agendado', recebimento: 'Recebimento' };
 
-  const cards = [
-    { title: 'Saldo Total', value: formatCurrency(data?.saldoTotal), icon: Landmark, color: 'bg-blue-50 text-blue-700', iconColor: 'text-blue-600' },
-    { title: 'Faturado (Mês)', value: formatCurrency(data?.totalFaturado), icon: FileText, color: 'bg-purple-50 text-purple-700', iconColor: 'text-purple-600' },
-    { title: 'Total Recebido', value: formatCurrency(data?.valorRecebido), icon: TrendingUp, color: 'bg-emerald-50 text-emerald-700', iconColor: 'text-emerald-600' },
-    { title: 'Total Pago', value: formatCurrency(data?.valorPago), icon: TrendingDown, color: 'bg-red-50 text-red-700', iconColor: 'text-red-600' },
-    { title: 'Pendentes', value: `${data?.recebimentosPendentes ?? 0} rec. / ${data?.pagamentosPendentes ?? 0} pag.`, icon: Clock, color: 'bg-amber-50 text-amber-700', iconColor: 'text-amber-600' },
-    { title: 'Faturas p/ Receber', value: formatCurrency((data?.totalFaturado ?? 0) - (data?.totalFaturadoPago ?? 0)), icon: AlertTriangle, color: 'bg-orange-50 text-orange-700', iconColor: 'text-orange-600' },
-  ];
+  const faturacao = data?.faturacaoAcumulada ?? 0;
+  const despesas = data?.despesasAcumuladas ?? 0;
+  const pagFornecedores = data?.fornecedoresFaturado ?? data?.pagFornecedoresAcumulados ?? 0;
+  const resultado = data?.resultadoAcumulado ?? (faturacao - despesas - pagFornecedores);
+  const positivo = resultado >= 0;
+  const aPagar = atencao?.aPagar;
+  const aReceber = atencao?.aReceber;
+  const al = atencao?.alertas;
+  const fixasEmFalta: number = data?.fornecedoresFixosEmFaltaCount ?? 0;
+
+  // Cartões do bloco "Precisa de atenção": só aparecem os que têm algo pendente.
+  const alertas: { chave: string; n: number; texto: string; detalhe?: string; href: string; nivel: 'alto' | 'medio' | 'info'; icon: any }[] = [
+    { chave: 'pagarVencido', n: aPagar?.vencidos ?? 0, texto: 'por pagar com data ultrapassada', detalhe: aPagar ? mask(formatCurrency(aPagar.valorVencido)) : undefined, href: '#agenda', nivel: 'alto' as const, icon: AlertTriangle },
+    { chave: 'receberVencido', n: aReceber?.vencidos ?? 0, texto: 'faturas de clientes por receber em atraso', detalhe: aReceber ? mask(formatCurrency(aReceber.valorVencido)) : undefined, href: '#agenda', nivel: 'alto' as const, icon: ArrowDownCircle },
+    { chave: 'fixas', n: fixasEmFalta, texto: 'faturas fixas mensais em falta', href: '#faturas-fixas', nivel: 'medio' as const, icon: Receipt },
+    { chave: 'efatura', n: al?.efatura?.emFalta ?? 0, texto: 'documentos do e-Fatura em falta na app', detalhe: al?.efatura ? `${al.efatura.mes} · ${mask(formatCurrency(al.efatura.valorEmFalta))}` : undefined, href: '/efatura', nivel: 'medio' as const, icon: FileSearch },
+    { chave: 'impostos', n: al?.impostosAVencer ?? 0, texto: 'impostos vencidos ou a vencer em 15 dias', href: '/impostos', nivel: 'medio' as const, icon: Landmark },
+    { chave: 'digit', n: (al?.digitalizacoesPorConfirmar ?? 0) + (al?.digitalizacoesComErro ?? 0), texto: 'digitalizações por confirmar', detalhe: al?.digitalizacoesComErro ? `${al.digitalizacoesComErro} com erro` : undefined, href: '/digitalizacoes', nivel: 'info' as const, icon: ScanLine },
+    { chave: 'conciliar', n: al?.movimentosPorConciliar ?? 0, texto: 'movimentos bancários por conciliar', detalhe: 'as faturas pagas só saem de "a pagar" depois de conciliadas', href: '/reconciliacao', nivel: 'info' as const, icon: Landmark },
+    { chave: 'faltas', n: al?.faltasPorDecidir ?? 0, texto: 'justificações de faltas por decidir', href: '/ponto/admin', nivel: 'info' as const, icon: CalendarDays },
+    { chave: 'ferias', n: al?.feriasPorDecidir ?? 0, texto: 'pedidos de férias por decidir', href: '/ponto/admin', nivel: 'info' as const, icon: CalendarDays },
+  ].filter((a) => a.n > 0);
+  const COR_NIVEL = {
+    alto: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300',
+    medio: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300',
+    info: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300',
+  } as const;
+
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const listaAgenda = (itens: any[], vazio: string) => {
+    const atrasados = (itens ?? []).filter((i) => i.vencido).reverse(); // mais recentes primeiro
+    const proximos = (itens ?? []).filter((i) => !i.vencido);
+    const linha = (i: any) => (
+      <Link key={`${i.tipo}-${i.id}`} href={i.href} className="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0 hover:bg-muted/40 -mx-2 px-2 rounded">
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{i.entidade || i.descricao}</p>
+          <p className={`text-xs truncate ${i.vencido ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+            {i.data ? (i.vencido ? `Desde ${formatDate(i.data)}` : i.data.slice(0, 10) === hojeISO ? 'Hoje' : formatDate(i.data)) : 'Sem data'} · {i.entidade ? i.descricao : TIPO_AGENDA[i.tipo]}
+          </p>
+        </div>
+        <span className="text-sm font-semibold tabular-nums whitespace-nowrap">{mask(formatCurrency(i.valor))}</span>
+      </Link>
+    );
+    if (atrasados.length === 0 && proximos.length === 0) return <p className="text-sm text-muted-foreground py-4">{vazio}</p>;
+    return (
+      <div>
+        {proximos.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Próximos</p>
+            {proximos.slice(0, 6).map(linha)}
+          </div>
+        )}
+        {atrasados.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Em atraso · {atrasados.length}</p>
+            {atrasados.slice(0, 6).map(linha)}
+            {atrasados.length > 6 && <p className="text-xs text-muted-foreground pt-2">e mais {atrasados.length - 6}…</p>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const categorias = Object.entries(data?.despesasPorCategoria ?? {}).sort((a: any, b: any) => b[1] - a[1]) as [string, number][];
+  const maxCategoria = Math.max(1, ...categorias.map(([, v]) => v));
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={LayoutDashboard} title="Dashboard" description="Visão geral da situação financeira da CRIACONSENSOS" />
-
-      {/* Resultado acumulado em destaque (desde janeiro · Faturação − Despesas − Faturado por fornecedores) */}
-      {(() => {
-        const faturacao = data?.faturacaoAcumulada ?? 0;
-        const despesas = data?.despesasAcumuladas ?? 0;
-        const pagFornecedores = data?.fornecedoresFaturado ?? data?.pagFornecedoresAcumulados ?? 0;
-        const resultado = data?.resultadoAcumulado ?? (faturacao - despesas - pagFornecedores);
-        const positivo = resultado >= 0;
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`rounded-2xl p-6 sm:p-8 shadow-sm border ${positivo ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-red-200 bg-red-50/60 dark:border-red-800 dark:bg-red-900/20'}`}
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard"
+        description="Visão geral da situação financeira da CRIACONSENSOS"
+        action={
+          <button
+            type="button"
+            onClick={toggleHideValues}
+            title={hideValues ? 'Mostrar valores' : 'Ocultar valores'}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-card border border-border text-muted-foreground hover:text-foreground transition"
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-muted-foreground mb-1">Resultado desde janeiro até hoje · Faturação − Despesas − Faturado por fornecedores</p>
-                <p className={`text-4xl sm:text-5xl font-bold font-display tracking-tight tabular-nums ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {hideValues ? '••••••' : `${positivo ? '+' : '-'} ${formatCurrency(Math.abs(resultado))}`}
-                </p>
-                <p className={`text-sm font-medium mt-1 ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {positivo ? 'Resultado positivo' : 'Resultado negativo'}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={toggleHideValues}
-                  title={hideValues ? 'Mostrar valores' : 'Ocultar valores'}
-                  aria-label={hideValues ? 'Mostrar valores' : 'Ocultar valores'}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-card/70 border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition"
-                >
-                  {hideValues ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  <span className="hidden sm:inline">{hideValues ? 'Mostrar valores' : 'Ocultar valores'}</span>
-                </button>
-                <div className={`p-4 rounded-2xl ${positivo ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-red-100 dark:bg-red-900/40'}`}>
-                  {positivo
-                    ? <TrendingUp className="h-9 w-9 sm:h-12 sm:w-12 text-emerald-600 dark:text-emerald-400" />
-                    : <TrendingDown className="h-9 w-9 sm:h-12 sm:w-12 text-red-600 dark:text-red-400" />}
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setMovModal({ tipo: 'faturacao', titulo: 'Faturação desde janeiro', itens: data?.movimentosFaturacao ?? [], total: faturacao })}
-                className="text-left rounded-xl bg-card/70 border border-border p-3 hover:border-purple-400 hover:shadow-sm transition group"
-              >
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-purple-600" />Faturação (desde janeiro)</p>
-                {/* por mês */}
-                <p className="text-lg font-bold font-display text-foreground mt-0.5 tabular-nums">{mask(formatCurrency(faturacao))}</p>
-                <p className="text-[11px] text-purple-600 dark:text-purple-400 mt-0.5 flex items-center gap-1 opacity-80 group-hover:opacity-100"><Eye className="h-3 w-3" />Ver por mês</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMovModal({ tipo: 'despesas', titulo: 'Despesas desde janeiro', itens: data?.movimentosDespesas ?? [], total: despesas })}
-                className="text-left rounded-xl bg-card/70 border border-border p-3 hover:border-red-400 hover:shadow-sm transition group"
-              >
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ShoppingCart className="h-3.5 w-3.5 text-red-600" />Despesas (desde janeiro)</p>
-                <p className="text-lg font-bold font-display text-foreground mt-0.5 tabular-nums">{mask(formatCurrency(despesas))}</p>
-                <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5 flex items-center gap-1 opacity-80 group-hover:opacity-100"><Eye className="h-3 w-3" />Ver por mês</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMovModal({ tipo: 'pagamentos', titulo: 'Faturado por fornecedores, por mês (desde janeiro)', itens: data?.movimentosPagamentosFornecedores ?? [], total: pagFornecedores })}
-                className="text-left rounded-xl bg-card/70 border border-border p-3 hover:border-orange-400 hover:shadow-sm transition group"
-              >
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ArrowUpCircle className="h-3.5 w-3.5 text-orange-600" />Fornecedores — faturado (desde janeiro)</p>
-                <p className="text-lg font-bold font-display text-foreground mt-0.5 tabular-nums">{mask(formatCurrency(pagFornecedores))}</p>
-                <p className="text-[11px] text-orange-600 dark:text-orange-400 mt-0.5 flex items-center gap-1 opacity-80 group-hover:opacity-100"><Eye className="h-3 w-3" />Ver por mês</p>
-              </button>
-            </div>
-          </motion.div>
-        );
-      })()}
+            {hideValues ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            <span className="hidden sm:inline">{hideValues ? 'Mostrar valores' : 'Ocultar valores'}</span>
+          </button>
+        }
+      />
 
+      {/* 1. Números principais */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-card rounded-xl p-4 border border-border shadow-sm">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5" />Saldo em bancos</p>
+          <p className="text-2xl font-bold font-display tabular-nums mt-1">{mask(formatCurrency(data?.saldoTotal))}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{(data?.contas ?? []).length} conta{(data?.contas ?? []).length === 1 ? '' : 's'} ativa{(data?.contas ?? []).length === 1 ? '' : 's'}</p>
+        </div>
+        <div className={`rounded-xl p-4 border shadow-sm ${positivo ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20' : 'border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/20'}`}>
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">{positivo ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}Resultado desde janeiro</p>
+          <p className={`text-2xl font-bold font-display tabular-nums mt-1 ${positivo ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>{hideValues ? '••••••' : `${positivo ? '+' : '−'} ${formatCurrency(Math.abs(resultado))}`}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">faturação − despesas − fornecedores</p>
+        </div>
+        <a href="#agenda" className="bg-card rounded-xl p-4 border border-border shadow-sm hover:border-emerald-400 transition">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ArrowDownCircle className="h-3.5 w-3.5 text-emerald-600" />A receber de clientes</p>
+          <p className="text-2xl font-bold font-display tabular-nums mt-1">{aReceber ? mask(formatCurrency(aReceber.total)) : '—'}</p>
+          <p className={`text-xs mt-0.5 ${aReceber?.vencidos ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{aReceber ? (aReceber.vencidos ? `${aReceber.vencidos} em atraso` : `${aReceber.quantidade} fatura${aReceber.quantidade === 1 ? '' : 's'}`) : 'a carregar…'}</p>
+        </a>
+        <a href="#agenda" className="bg-card rounded-xl p-4 border border-border shadow-sm hover:border-red-400 transition">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ArrowUpCircle className="h-3.5 w-3.5 text-red-600" />A pagar (sem pagamento registado)</p>
+          <p className="text-2xl font-bold font-display tabular-nums mt-1">{aPagar ? mask(formatCurrency(aPagar.total)) : '—'}</p>
+          <p className={`text-xs mt-0.5 ${aPagar?.vencidos ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{aPagar ? (aPagar.vencidos ? `${aPagar.vencidos} com data ultrapassada` : `${aPagar.quantidade} documento${aPagar.quantidade === 1 ? '' : 's'}`) : 'a carregar…'}</p>
+        </a>
+      </div>
+
+      {/* Detalhe do resultado (abre por mês) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <button type="button" onClick={() => setMovModal({ tipo: 'faturacao', titulo: 'Faturação desde janeiro', itens: data?.movimentosFaturacao ?? [], total: faturacao })} className="text-left rounded-xl bg-card border border-border p-3 hover:border-purple-400 transition group">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-purple-600" />Faturação desde janeiro</p>
+          <p className="text-lg font-bold font-display tabular-nums">{mask(formatCurrency(faturacao))}</p>
+          <p className="text-[11px] text-purple-600 dark:text-purple-400 flex items-center gap-1"><Eye className="h-3 w-3" />Ver por mês</p>
+        </button>
+        <button type="button" onClick={() => setMovModal({ tipo: 'despesas', titulo: 'Despesas desde janeiro', itens: data?.movimentosDespesas ?? [], total: despesas })} className="text-left rounded-xl bg-card border border-border p-3 hover:border-amber-400 transition group">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ShoppingCart className="h-3.5 w-3.5 text-amber-600" />Despesas desde janeiro</p>
+          <p className="text-lg font-bold font-display tabular-nums">{mask(formatCurrency(despesas))}</p>
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1"><Eye className="h-3 w-3" />Ver por mês</p>
+        </button>
+        <button type="button" onClick={() => setMovModal({ tipo: 'pagamentos', titulo: 'Faturado por fornecedores, por mês (desde janeiro)', itens: data?.movimentosPagamentosFornecedores ?? [], total: pagFornecedores })} className="text-left rounded-xl bg-card border border-border p-3 hover:border-red-400 transition group">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ArrowUpCircle className="h-3.5 w-3.5 text-red-600" />Fornecedores — faturado desde janeiro</p>
+          <p className="text-lg font-bold font-display tabular-nums">{mask(formatCurrency(pagFornecedores))}</p>
+          <p className="text-[11px] text-red-600 dark:text-red-400 flex items-center gap-1"><Eye className="h-3 w-3" />Ver por mês</p>
+        </button>
+      </div>
+
+      {/* 2. Precisa de atenção */}
+      <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+        <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><Bell className="h-5 w-5 text-amber-600" />Precisa de atenção</h2>
+        {!atencao ? (
+          <div className="h-16 bg-muted rounded-lg animate-pulse" />
+        ) : alertas.length === 0 ? (
+          <p className="text-sm text-emerald-700 dark:text-emerald-400 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Está tudo em dia.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {alertas.map((a) => {
+              const Icon = a.icon;
+              const conteudo = (
+                <>
+                  <Icon className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm"><span className="font-bold tabular-nums">{a.n}</span> {a.texto}</p>
+                    {a.detalhe && <p className="text-xs opacity-80 truncate">{a.detalhe}</p>}
+                  </div>
+                </>
+              );
+              const cls = `flex items-start gap-2 rounded-lg border p-3 hover:shadow-sm transition ${COR_NIVEL[a.nivel]}`;
+              return a.href.startsWith('#') ? (
+                <a key={a.chave} href={a.href} className={cls}>{conteudo}</a>
+              ) : (
+                <Link key={a.chave} href={a.href} className={cls}>{conteudo}</Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* 3. A pagar / a receber */}
+      <div id="agenda" className="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-20">
+        <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+          <div className="flex items-baseline justify-between mb-2">
+            <h2 className="text-base font-semibold flex items-center gap-2"><CalendarClock className="h-5 w-5 text-red-600" />Pagamentos</h2>
+            {aPagar && <span className="text-sm text-muted-foreground tabular-nums">{mask(formatCurrency(aPagar.total))}</span>}
+          </div>
+          {!atencao ? <div className="h-40 bg-muted rounded-lg animate-pulse" /> : listaAgenda(aPagar?.itens ?? [], 'Não há nada por pagar.')}
+        </section>
+        <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+          <div className="flex items-baseline justify-between mb-2">
+            <h2 className="text-base font-semibold flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-emerald-600" />A receber de clientes</h2>
+            {aReceber && <span className="text-sm text-muted-foreground tabular-nums">{mask(formatCurrency(aReceber.total))}</span>}
+          </div>
+          {!atencao ? <div className="h-40 bg-muted rounded-lg animate-pulse" /> : listaAgenda(aReceber?.itens ?? [], 'Não há faturas por receber.')}
+        </section>
+      </div>
+
+      {/* 4. Gráficos */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section className="lg:col-span-2 bg-card rounded-xl p-5 border border-border shadow-sm">
+          <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" />Faturação e custos por mês</h2>
+          <div className="h-64">
+            <MensalChart faturacao={data?.movimentosFaturacao ?? []} despesas={data?.movimentosDespesas ?? []} fornecedores={data?.movimentosPagamentosFornecedores ?? []} ocultar={hideValues} />
+          </div>
+        </section>
+        <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+          <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><ShoppingCart className="h-5 w-5 text-primary" />Despesas por categoria</h2>
+          {categorias.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem despesas pagas.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {categorias.slice(0, 8).map(([cat, val]) => (
+                <div key={cat}>
+                  <div className="flex justify-between text-xs mb-1"><span>{CATEGORIAS[cat] || cat}</span><span className="tabular-nums text-muted-foreground">{mask(formatCurrency(val))}</span></div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden"><div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.round((val / maxCategoria) * 100)}%` }} /></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* 5. Contas bancárias e saldo diário */}
+      {(data?.contas?.length ?? 0) > 0 && (
+        <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+          <h2 className="text-base font-semibold mb-3 flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Contas bancárias</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {(data?.contas ?? []).map((conta: any) => (
+              <div key={conta?.id} className="p-3 rounded-lg bg-muted/50">
+                <p className="font-medium text-sm">{conta?.nome}</p>
+                <p className="text-xs text-muted-foreground">{conta?.banco}</p>
+                <p className={`text-lg font-bold tabular-nums mt-1 ${(conta?.saldoAtual ?? 0) < 0 ? 'text-red-600' : ''}`}>{mask(formatCurrency(conta?.saldoAtual))}</p>
+              </div>
+            ))}
+          </div>
+          {(data?.saldoDiario?.length ?? 0) > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Saldo diário do mês</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {(data?.saldoDiario ?? []).map((d: any) => (
+                  <div key={d.dia} className={`shrink-0 px-3 py-2 rounded-lg border text-xs ${d.saldo >= 0 ? 'border-emerald-200 dark:border-emerald-900' : 'border-red-200 dark:border-red-900'}`}>
+                    <p className="text-muted-foreground">{new Date(d.dia + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}</p>
+                    <p className="font-semibold tabular-nums">{mask(formatCurrency(d.saldo))}</p>
+                    <p className={`tabular-nums ${d.variacao >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{hideValues ? '•••' : `${d.variacao >= 0 ? '+' : ''}${formatCurrency(d.variacao)}`}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 6. Faturas fixas mensais (detalhe) */}
+      <div id="faturas-fixas" className="scroll-mt-20">
       {/* Alerta de faturas fixas mensais em falta (de Abril até hoje) */}
       {data && (() => {
         const porMes: { ano: number; mes: number; label: string; fornecedores: { nome: string; esperado: number; contabilizadas: number; emFalta: number }[] }[] = data?.fornecedoresFixosEmFaltaPorMes ?? [];
@@ -447,121 +602,7 @@ export function DashboardClient() {
         );
       })()}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards?.map((card: any, idx: number) => (
-          <motion.div key={card?.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }} className="bg-card rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">{card?.title}</span>
-              <div className={`p-2 rounded-lg ${card?.color}`}>
-                {card?.icon && <card.icon className={`h-4 w-4 ${card?.iconColor}`} />}
-              </div>
-            </div>
-            <p className="text-xl font-bold font-display tracking-tight text-foreground">{card?.title === 'Pendentes' ? card?.value : mask(card?.value)}</p>
-          </motion.div>
-        ))}
       </div>
-
-      {(data?.contas?.length ?? 0) > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Landmark className="h-5 w-5 text-primary" />Contas Bancárias</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(data?.contas ?? []).map((conta: any) => (
-              <div key={conta?.id} className="p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                <p className="font-medium text-sm">{conta?.nome}</p>
-                <p className="text-xs text-muted-foreground">{conta?.banco}</p>
-                <p className="text-lg font-bold font-mono mt-2">{mask(formatCurrency(conta?.saldoAtual))}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-card rounded-xl p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><TrendingUp className="h-5 w-5 text-primary" />Fluxo do Mês Atual</h2>
-        <div className="h-64"><FluxoChart recebimentos={data?.recebimentosMes ?? []} pagamentos={data?.pagamentosMes ?? []} /></div>
-      </motion.div>
-
-      {/* Saldo Diário */}
-      {(data?.saldoDiario?.length ?? 0) > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" />Saldo Diário (Mês Atual)</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {(data?.saldoDiario ?? []).map((d: any) => {
-              const isPositive = d.saldo >= 0;
-              const varPositive = d.variacao >= 0;
-              return (
-                <div key={d.dia} className={`p-3 rounded-lg border ${isPositive ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/20'}`}>
-                  <p className="text-xs font-medium text-muted-foreground">{new Date(d.dia + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}</p>
-                  <p className={`text-sm font-bold font-mono ${isPositive ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>{mask(formatCurrency(d.saldo))}</p>
-                  <p className={`text-xs font-mono ${varPositive ? 'text-emerald-600' : 'text-red-600'}`}>{hideValues ? '•••' : `${varPositive ? '+' : ''}${formatCurrency(d.variacao)}`}</p>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Despesas Fixas Mensais */}
-      {data?.despesasPorCategoria && Object.keys(data.despesasPorCategoria).length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><ShoppingCart className="h-5 w-5 text-primary" />Despesas por Categoria</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {Object.entries(data.despesasPorCategoria).map(([cat, val]: [string, any]) => (
-              <div key={cat} className="p-3 rounded-lg bg-muted/50"><p className="text-xs text-muted-foreground">{CATEGORIAS[cat] || cat}</p><p className="text-lg font-bold">{mask(formatCurrency(val))}</p></div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Recebimentos e Pagamentos em Falta */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-emerald-600" />Recebimentos em Falta</h2>
-          {(data?.recebimentosEmFalta?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Todos os recebimentos estão em dia! ✓</p>
-          ) : (
-            <div className="space-y-3">
-              {(data?.recebimentosEmFalta ?? []).map((r: any) => (
-                <div key={r?.id} className="flex items-center justify-between p-3 rounded-lg bg-red-50/50 dark:bg-red-900/10 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                  <div><p className="text-sm font-medium">{r?.descricao}</p><p className="text-xs text-muted-foreground">{r?.cliente?.nome ?? 'Sem cliente'} • {formatDate(r?.dataRecebimento)}</p></div>
-                  <div className="text-right"><p className="text-sm font-bold font-mono text-red-600">{mask(formatCurrency(r?.valor))}</p><EstadoBadge estado={r?.estado} /></div>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-red-600" />Pagamentos em Falta</h2>
-          {(data?.pagamentosEmFalta?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Todos os pagamentos estão em dia! ✓</p>
-          ) : (
-            <div className="space-y-3">
-              {(data?.pagamentosEmFalta ?? []).map((p: any) => (
-                <div key={p?.id} className="flex items-center justify-between p-3 rounded-lg bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
-                  <div><p className="text-sm font-medium">{p?.descricao}</p><p className="text-xs text-muted-foreground">{p?.fornecedor?.nome ?? 'Sem fornecedor'} • {formatDate(p?.dataPagamento)}</p></div>
-                  <div className="text-right"><p className="text-sm font-bold font-mono text-amber-700">{mask(formatCurrency(p?.valor))}</p><EstadoBadge estado={p?.estado} /></div>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Faturas Pendentes de Pagamento */}
-      {(data?.faturasPendentes?.length ?? 0) > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="bg-card rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><FileText className="h-5 w-5 text-orange-600" />Faturas Pendentes de Pagamento</h2>
-          <div className="space-y-2">
-            {(data?.faturasPendentes ?? []).slice(0, 10).map((f: any) => (
-              <div key={f?.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                <div><p className="text-sm font-medium">{f?.numero || f?.descricao || 'Fatura'}</p><p className="text-xs text-muted-foreground">{f?.cliente?.nome || f?.fornecedor?.nome || '-'} {f?.dataVencimento ? `• Vence: ${formatDate(f.dataVencimento)}` : ''}</p></div>
-                <p className="text-sm font-bold font-mono">{mask(formatCurrency(f?.valor))}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
 
       {/* Modal: associar fatura digitalizada ao fornecedor fixo */}
       <AnimatePresence>
