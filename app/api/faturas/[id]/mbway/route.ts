@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { iniciarPagamentoMBWay, normalizarTelemovel } from '@/lib/grafica/mbway';
+import { iniciarPagamentoMBWay, normalizarTelemovel } from '@/lib/ifthenpay/mbway';
 
 function gerarOrderId(): string {
   const base = Date.now().toString(36);

@@ -34,6 +34,11 @@ export type Correspondencia = {
 
 const DIAS_TOLERANCIA = 5;
 
+// NIF da própria empresa. Algumas despesas ficaram gravadas com ele (a leitura
+// automática apanhou o NIF do comprador); nesses casos o emitente é desconhecido.
+const NIF_EMPRESA = '515943401';
+const DIAS_TOLERANCIA_SEM_EMITENTE = 2;
+
 export const soDigitos = (s: string | null | undefined) => (s || '').replace(/\D/g, '');
 
 function tokensNumericos(s: string | null | undefined): string[] {
@@ -121,12 +126,10 @@ export function cruzar(docsEFatura: DocEFatura[], docsApp: DocApp[]): Map<string
       .filter((d) => {
         if (usados.has(d.id) || d.valor === null) return false;
         const dataD = dataISO(d.data);
-        return (
-          mesmoEmitente(e, d) &&
-          Math.abs(Math.abs(d.valor) - Math.abs(e.total)) <= 0.02 &&
-          !!dataD &&
-          diasEntre(dataD, dataE) <= DIAS_TOLERANCIA
-        );
+        if (!dataD || Math.abs(Math.abs(d.valor) - Math.abs(e.total)) > 0.02) return false;
+        const dias = diasEntre(dataD, dataE);
+        if (soDigitos(d.nif) === NIF_EMPRESA) return dias <= DIAS_TOLERANCIA_SEM_EMITENTE;
+        return mesmoEmitente(e, d) && dias <= DIAS_TOLERANCIA;
       })
       .sort((a, b) => diasEntre(dataISO(a.data)!, dataE) - diasEntre(dataISO(b.data)!, dataE))[0];
     if (cand) {

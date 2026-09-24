@@ -31,8 +31,6 @@ import {
   Settings,
   UserCog,
   ChevronDown,
-  Printer,
-  Calculator,
   GripVertical,
   FileUp,
   ListOrdered,
@@ -101,11 +99,6 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/movimentos-bancarios', label: 'Movimentos Bancários', icon: ListOrdered, area: 'bancos' },
     { href: '/reconciliacao', label: 'Reconciliação', icon: RefreshCcw, area: 'bancos' },
   ] },
-  { title: 'Orçamentos', items: [
-    { href: '/orcamentos-graficos', label: 'Orçamentos Gráficos', icon: Printer, area: 'orcamentos' },
-    { href: '/orcamentos-graficos/dashboard', label: 'Dashboard de Orçamentos', icon: LayoutDashboard, sub: true, area: 'orcamentos' },
-    { href: '/orcamentos-graficos/config', label: 'Configuração Gráfica', icon: Calculator, sub: true, adminOnly: true, area: 'orcamentos' },
-  ]},
   { title: 'Gestão', items: [
     { href: '/emprestimos', label: 'Empréstimos Sócio', icon: Handshake, hideForInsercao: true, area: 'gestao' },
     { href: '/relatorios', label: 'Relatórios', icon: BarChart3, hideForInsercao: true, area: 'gestao' },

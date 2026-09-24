@@ -17,7 +17,6 @@ export type AreaKey =
   | "fornecedores"
   | "documentos"
   | "bancos"
-  | "orcamentos"
   | "gestao"
   | "utilizadores";
 
@@ -28,7 +27,6 @@ export const AREAS: { key: AreaKey; label: string; descricao: string }[] = [
   { key: "fornecedores", label: "Fornecedores", descricao: "Fornecedores, faturas de fornecedores e pagamentos" },
   { key: "documentos", label: "Documentos", descricao: "Despesas, impostos, seguros, vencimentos e digitalizações" },
   { key: "bancos", label: "Bancos", descricao: "Contas, caixa, transferências, extratos e reconciliação" },
-  { key: "orcamentos", label: "Orçamentos", descricao: "Orçamentos gráficos" },
   { key: "gestao", label: "Gestão", descricao: "Empréstimos, relatórios e Moloni" },
   { key: "utilizadores", label: "Utilizadores", descricao: "Gestão de contas de utilizador" },
 ];
@@ -48,20 +46,20 @@ const LEVEL_RANK: Record<PermLevel, number> = { none: 0, view: 1, insert: 2, edi
 export const DEFAULT_PERMISSIONS: Record<GovernedRole, RolePermissions> = {
   editor: {
     clientes: "edit", fornecedores: "edit", documentos: "edit",
-    bancos: "edit", orcamentos: "edit", gestao: "edit", utilizadores: "edit",
+    bancos: "edit", gestao: "edit", utilizadores: "edit",
   },
   insercao: {
     clientes: "insert", fornecedores: "insert", documentos: "insert",
-    bancos: "insert", orcamentos: "insert", gestao: "insert", utilizadores: "none",
+    bancos: "insert", gestao: "insert", utilizadores: "none",
   },
   leitura: {
     clientes: "view", fornecedores: "view", documentos: "view",
-    bancos: "view", orcamentos: "view", gestao: "view", utilizadores: "none",
+    bancos: "view", gestao: "view", utilizadores: "none",
   },
 };
 
 function allLevel(level: PermLevel): RolePermissions {
-  return { clientes: level, fornecedores: level, documentos: level, bancos: level, orcamentos: level, gestao: level, utilizadores: level };
+  return { clientes: level, fornecedores: level, documentos: level, bancos: level, gestao: level, utilizadores: level };
 }
 
 // Permissões base de um perfil (usadas quando o utilizador não tem permissões
@@ -137,7 +135,7 @@ export function areasForPath(pathname: string): AreaKey[] {
   if (starts("/fornecedores") || starts("/pagamentos") || starts("/efatura")) return ["fornecedores"];
   if (starts("/despesas") || starts("/impostos") || starts("/seguros") || starts("/vencimentos") || starts("/digitalizacoes") || starts("/ocr") || starts("/upload")) return ["documentos"];
   if (starts("/contas") || starts("/caixa") || starts("/transferencias") || starts("/importar-extrato") || starts("/movimentos-bancarios") || starts("/movimentos") || starts("/reconciliacao")) return ["bancos"];
-  if (starts("/orcamentos-graficos") || starts("/grafica") || starts("/ifthenpay")) return ["orcamentos"];
+  // /api/ifthenpay/callback é público (chamado pela IfThenPay) e não passa por aqui.
   if (starts("/emprestimos") || starts("/relatorios") || starts("/moloni")) return ["gestao"];
   if (starts("/utilizadores") || starts("/users")) return ["utilizadores"];
 

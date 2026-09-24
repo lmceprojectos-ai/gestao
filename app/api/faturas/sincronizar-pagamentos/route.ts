@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { consultarEstadoMBWay, listarPagamentosIfThenPay } from '@/lib/grafica/ifthenpay-consultas';
+import { consultarEstadoMBWay, listarPagamentosIfThenPay } from '@/lib/ifthenpay/consultas';
 import { registarPagamentoConfirmado } from '@/lib/faturas/registar-pagamento';
 
 // Sincronização global: vai ao IfThenPay buscar pagamentos e marca as faturas de clientes
