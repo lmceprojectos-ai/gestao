@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import fs from 'fs';
+import { Readable } from 'stream';
 import { NextRequest, NextResponse } from 'next/server';
 import { isPublicKey, resolveLocalPath, verifySignature } from '@/lib/local-storage';
 
@@ -29,10 +30,13 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
   const inline = sp.get('inline') === '1';
   const fileName = (key.split('/').pop() || 'ficheiro').replace(/^\d+-/, '');
   const asciiName = fileName.normalize('NFKD').replace(/[^\x20-\x7E]/g, '').replace(/"/g, '') || 'ficheiro';
-  const data = fs.readFileSync(full);
-  return new NextResponse(data, {
+  // Enviado em blocos (stream): um documento de vários MB não fica todo em memória.
+  const stat = fs.statSync(full);
+  const stream = Readable.toWeb(fs.createReadStream(full)) as ReadableStream<Uint8Array>;
+  return new NextResponse(stream, {
     headers: {
       'Content-Type': contentType,
+      'Content-Length': String(stat.size),
       'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       'Cache-Control': isPublicKey(key) ? 'public, max-age=86400' : 'private, max-age=3600',
       'X-Content-Type-Options': 'nosniff',

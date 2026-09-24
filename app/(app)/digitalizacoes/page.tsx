@@ -15,6 +15,7 @@ import {
   Copy,
   FolderOpen,
   FileSignature,
+  Eye,
 } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
@@ -110,6 +111,32 @@ const TABS: { key: string; label: string }[] = [
   { key: 'confirmado', label: 'Confirmados' },
   { key: 'ignorado', label: 'Ignorados' },
 ];
+
+// Pré-visualização do documento. Nos registos já tratados só carrega a pedido:
+// abrir a página com dezenas de documentos de uma vez esgota os limites do
+// alojamento ("Resource Limit Is Reached").
+function PreVisualizacao({ id, nome, automatica }: { id: string; nome: string; automatica: boolean }) {
+  const [mostrar, setMostrar] = useState(automatica);
+  if (!mostrar) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMostrar(true)}
+        className="flex h-[120px] w-full items-center justify-center gap-2 bg-muted/20 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+      >
+        <Eye className="h-4 w-4" /> Ver documento
+      </button>
+    );
+  }
+  return (
+    <iframe
+      src={`/api/digitalizacoes/${id}/ficheiro`}
+      loading="lazy"
+      className="w-full h-[300px] bg-white"
+      title={nome}
+    />
+  );
+}
 
 export default function DigitalizacoesPage() {
   const [tab, setTab] = useState('por_confirmar');
@@ -470,10 +497,10 @@ export default function DigitalizacoesPage() {
                         Abrir <ExternalLink className="h-3 w-3" />
                       </Link>
                     </div>
-                    <iframe
-                      src={`/api/digitalizacoes/${item.id}/ficheiro`}
-                      className="w-full h-[300px] bg-white"
-                      title={item.nomeOriginal}
+                    <PreVisualizacao
+                      id={item.id}
+                      nome={item.nomeOriginal}
+                      automatica={editavel || item.estado === 'erro'}
                     />
                   </div>
 
