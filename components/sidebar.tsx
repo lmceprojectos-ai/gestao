@@ -41,9 +41,10 @@ import {
   Clock,
   Share2,
   FileSearch,
+  RotateCcw,
 } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
-import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { type AreaKey, type RolePermissions, DEFAULT_PERMISSIONS } from '@/lib/permissions';
 
@@ -121,49 +122,67 @@ const SECTION_COLORS: Record<string, string> = {
 };
 const sectionColor = (title: string | null) => SECTION_COLORS[title ?? '__main__'] ?? '#cbd5e1';
 
-function ReorderableNavItem({
+type PosicaoLargar = 'antes' | 'depois';
+
+// Item do menu que pode ser arrastado (com o rato) para outra posição ou outra
+// secção. Toma sempre a cor da secção onde está.
+function NavItemArrastavel({
   item,
   isActive,
   color,
+  aArrastar,
+  indicador,
   onNavigate,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }: {
   item: NavItem;
   isActive: boolean;
   color: string;
+  aArrastar: boolean;
+  indicador: PosicaoLargar | null;
   onNavigate: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
 }) {
-  const controls = useDragControls();
   const Icon = item?.icon;
   return (
-    <Reorder.Item
-      as="div"
-      value={item}
-      dragListener={false}
-      dragControls={controls}
-      style={{ backgroundColor: isActive ? color + '2e' : undefined }}
-      className={cn(
-        'group flex items-center rounded-lg text-[14px] font-medium transition-all duration-150',
-        isActive ? 'text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white'
-      )}
-    >
-      <button
-        type="button"
-        aria-label="Reordenar item"
-        onPointerDown={(e) => controls.start(e)}
-        onClick={(e) => e.preventDefault()}
-        className="flex-shrink-0 pl-2 pr-1 py-2.5 cursor-grab active:cursor-grabbing text-white/25 hover:text-white/70 touch-none"
+    <div className="relative" onDragOver={onDragOver} onDrop={onDrop}>
+      {indicador === 'antes' && <div className="absolute -top-0.5 left-2 right-2 h-0.5 rounded-full" style={{ backgroundColor: color }} />}
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        style={{ backgroundColor: isActive ? color + '2e' : undefined }}
+        className={cn(
+          'group flex items-center rounded-lg text-[14px] font-medium transition-all duration-150',
+          isActive ? 'text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white',
+          aArrastar && 'opacity-40'
+        )}
       >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-      <Link
-        href={item?.href ?? '/'}
-        onClick={onNavigate}
-        className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0', item?.sub ? 'pl-2' : 'pl-0')}
-      >
-        {Icon && <Icon style={{ color }} className={cn('flex-shrink-0', item?.sub ? 'h-3.5 w-3.5' : 'h-4 w-4')} />}
-        <span className="truncate">{item?.label}</span>
-      </Link>
-    </Reorder.Item>
+        <span
+          aria-hidden="true"
+          title="Arrastar para mudar de lugar ou de secção"
+          className="flex-shrink-0 pl-2 pr-1 py-2.5 cursor-grab active:cursor-grabbing text-white/25 group-hover:text-white/60"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
+        <Link
+          href={item?.href ?? '/'}
+          onClick={onNavigate}
+          draggable={false}
+          className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0', item?.sub ? 'pl-2' : 'pl-0')}
+        >
+          {Icon && <Icon style={{ color }} className={cn('flex-shrink-0 transition-colors', item?.sub ? 'h-3.5 w-3.5' : 'h-4 w-4')} />}
+          <span className="truncate">{item?.label}</span>
+        </Link>
+      </div>
+      {indicador === 'depois' && <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 rounded-full" style={{ backgroundColor: color }} />}
+    </div>
   );
 }
 
@@ -208,44 +227,74 @@ function SidebarInner() {
     });
   };
 
-  // Ordem personalizada dos itens (por secção), guardada no navegador por utilizador.
-  // Começa vazio para manter a hidratação determinística; carrega em useEffect após montar.
-  const [order, setOrder] = useState<Record<string, string[]>>({});
+  // Organização personalizada do menu (que itens ficam em que secção e por que ordem),
+  // guardada no navegador. Começa vazia para a hidratação ser determinística.
+  // Lê também a chave antiga 'sidebar_order' (mesma forma: secção → lista de links).
+  const [layout, setLayout] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('sidebar_order');
-      if (saved) setOrder(JSON.parse(saved));
+      const saved = localStorage.getItem('sidebar_layout') ?? localStorage.getItem('sidebar_order');
+      if (saved) setLayout(JSON.parse(saved));
     } catch {}
   }, []);
 
   const sectionKey = (title: string | null) => title ?? '__main__';
 
-  const applyOrder = (title: string | null, items: NavItem[]) => {
-    const saved = order[sectionKey(title)];
-    if (!saved || saved.length === 0) return items;
-    const byHref = new Map(items.map((it) => [it.href, it]));
-    const result: NavItem[] = [];
-    for (const href of saved) {
-      const it = byHref.get(href);
-      if (it) { result.push(it); byHref.delete(href); }
+  const itemVisivel = (it: NavItem) =>
+    (!it.adminOnly || isAdmin) && (!it.adminEditorOnly || isAdmin || isEditor) && !(it.hideForInsercao && isInsercao) && areaVisible(it.area);
+
+  // Secções como definidas no código (só com os itens que o perfil pode ver).
+  const base = navSections.map((s) => ({ ...s, items: s.items.filter(itemVisivel) }));
+  const porHref = new Map(base.flatMap((s) => s.items).map((it) => [it.href, it]));
+  // Aplica a organização guardada; itens não mencionados ficam na secção original, no fim.
+  const colocados = new Set<string>();
+  const arrumadas = base.map((s) => {
+    const items: NavItem[] = [];
+    for (const href of layout[sectionKey(s.title)] ?? []) {
+      const it = porHref.get(href);
+      if (it && !colocados.has(href)) { items.push(it); colocados.add(href); }
     }
-    // Itens novos/desconhecidos ficam no fim, mantendo a ordem original.
-    for (const it of items) if (byHref.has(it.href)) result.push(it);
-    return result;
+    return { ...s, items };
+  });
+  base.forEach((s, i) => s.items.forEach((it) => {
+    if (!colocados.has(it.href)) { arrumadas[i].items.push(it); colocados.add(it.href); }
+  }));
+  // Uma secção esvaziada continua visível, para se poder voltar a largar itens nela.
+  const sections = arrumadas.filter((s, i) => s.items.length > 0 || base[i].items.length > 0);
+  const menuPersonalizado = Object.keys(layout).length > 0;
+
+  // Arrastar e largar (rato).
+  const [aArrastar, setAArrastar] = useState<string | null>(null);
+  const [alvo, setAlvo] = useState<{ secao: string; href: string | null; posicao: PosicaoLargar } | null>(null);
+
+  const guardarLayout = (novo: Record<string, string[]>) => {
+    setLayout(novo);
+    try {
+      localStorage.setItem('sidebar_layout', JSON.stringify(novo));
+      localStorage.removeItem('sidebar_order');
+    } catch {}
   };
 
-  const handleReorder = (title: string | null, newItems: NavItem[]) => {
-    setOrder((prev) => {
-      const next = { ...prev, [sectionKey(title)]: newItems.map((it) => it.href) };
-      try { localStorage.setItem('sidebar_order', JSON.stringify(next)); } catch {}
-      return next;
-    });
+  const moverItem = (href: string, secao: string, antesDe: string | null, posicao: PosicaoLargar) => {
+    const atual: Record<string, string[]> = Object.fromEntries(
+      sections.map((sec) => [sectionKey(sec.title), sec.items.map((it) => it.href).filter((h) => h !== href)])
+    );
+    const lista = atual[secao] ?? [];
+    let idx = antesDe ? lista.indexOf(antesDe) : -1;
+    if (idx === -1) idx = lista.length;
+    else if (posicao === 'depois') idx += 1;
+    lista.splice(idx, 0, href);
+    atual[secao] = lista;
+    guardarLayout(atual);
   };
 
-  const sections = navSections
-    .map((s) => ({ ...s, items: s.items.filter((it) => (!it.adminOnly || isAdmin) && (!it.adminEditorOnly || isAdmin || isEditor) && !(it.hideForInsercao && isInsercao) && areaVisible(it.area)) }))
-    .filter((s) => s.items.length > 0);
+  const terminarArrasto = () => { setAArrastar(null); setAlvo(null); };
+
+  const reporMenu = () => {
+    setLayout({});
+    try { localStorage.removeItem('sidebar_layout'); localStorage.removeItem('sidebar_order'); } catch {}
+  };
 
   const itemIsActive = (item: NavItem) => {
     if (item.tipo) {
@@ -318,15 +367,36 @@ function SidebarInner() {
           </Link>
         )}
 
-        {sections?.map((section: any, si: number) => {
+        {sections?.map((section: any) => {
+          const chave = sectionKey(section.title);
+          const cor = sectionColor(section.title);
           const isCollapsed = section?.title ? !!collapsed[section.title] : false;
+          const secaoAlvo = !!aArrastar && alvo?.secao === chave;
+          // Largar em cima do título ou do espaço vazio da secção → fica no fim dela.
+          const sobreSecao = (e: React.DragEvent) => {
+            if (!aArrastar) return;
+            e.preventDefault();
+            if (alvo?.secao !== chave || alvo.href !== null) setAlvo({ secao: chave, href: null, posicao: 'depois' });
+          };
+          const largarNaSecao = (e: React.DragEvent) => {
+            if (!aArrastar) return;
+            e.preventDefault();
+            moverItem(aArrastar, chave, alvo?.secao === chave ? alvo.href : null, alvo?.posicao ?? 'depois');
+            terminarArrasto();
+          };
           return (
-          <div key={si} className="space-y-1">
+          <div
+            key={chave}
+            onDragOver={sobreSecao}
+            onDrop={largarNaSecao}
+            style={secaoAlvo ? { outline: `1px dashed ${cor}`, backgroundColor: cor + '14' } : undefined}
+            className="space-y-1 rounded-lg transition-colors"
+          >
             {section?.title && (
               <button
                 type="button"
                 onClick={() => toggleSection(section.title)}
-                style={{ color: sectionColor(section.title) }}
+                style={{ color: cor }}
                 className="w-full flex items-center justify-between px-3 pt-1 pb-0.5 text-[14px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity"
               >
                 <span>{section.title}</span>
@@ -342,23 +412,45 @@ function SidebarInner() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <Reorder.Group
-                    as="div"
-                    axis="y"
-                    values={applyOrder(section.title, section.items)}
-                    onReorder={(newItems: NavItem[]) => handleReorder(section.title, newItems)}
-                    className="space-y-1"
-                  >
-                    {applyOrder(section.title, section.items).map((item: NavItem) => (
-                      <ReorderableNavItem
+                  <div className="space-y-1 py-0.5">
+                    {section.items.map((item: NavItem) => (
+                      <NavItemArrastavel
                         key={item.href}
                         item={item}
                         isActive={itemIsActive(item)}
-                        color={sectionColor(section.title)}
+                        color={cor}
+                        aArrastar={aArrastar === item.href}
+                        indicador={aArrastar && aArrastar !== item.href && alvo?.secao === chave && alvo.href === item.href ? alvo.posicao : null}
                         onNavigate={() => setMobileOpen(false)}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', item.href);
+                          setAArrastar(item.href);
+                        }}
+                        onDragEnd={terminarArrasto}
+                        onDragOver={(e) => {
+                          if (!aArrastar) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          const posicao: PosicaoLargar = e.clientY < r.top + r.height / 2 ? 'antes' : 'depois';
+                          if (alvo?.secao !== chave || alvo.href !== item.href || alvo.posicao !== posicao) {
+                            setAlvo({ secao: chave, href: item.href, posicao });
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (!aArrastar) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (aArrastar !== item.href) moverItem(aArrastar, chave, item.href, alvo?.posicao ?? 'antes');
+                          terminarArrasto();
+                        }}
                       />
                     ))}
-                  </Reorder.Group>
+                    {section.items.length === 0 && (
+                      <p className="px-3 py-2 text-xs italic text-white/40">Arraste itens para aqui</p>
+                    )}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -367,6 +459,17 @@ function SidebarInner() {
         })}
       </nav>
       <div className="p-3 border-t border-white/10">
+        {menuPersonalizado && (
+          <button
+            type="button"
+            onClick={reporMenu}
+            title="Voltar à organização original do menu"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-white/50 hover:bg-white/10 hover:text-white transition-all w-full"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>Repor menu original</span>
+          </button>
+        )}
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all w-full"
