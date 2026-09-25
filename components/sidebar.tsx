@@ -232,10 +232,15 @@ function SidebarInner() {
   // Lê também a chave antiga 'sidebar_order' (mesma forma: secção → lista de links).
   const [layout, setLayout] = useState<Record<string, string[]>>({});
 
+  // Ordem das secções (títulos), também guardada no navegador. O Dashboard fica sempre no topo.
+  const [ordemSecoes, setOrdemSecoes] = useState<string[]>([]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem('sidebar_layout') ?? localStorage.getItem('sidebar_order');
       if (saved) setLayout(JSON.parse(saved));
+      const secoes = localStorage.getItem('sidebar_sections_order');
+      if (secoes) setOrdemSecoes(JSON.parse(secoes));
     } catch {}
   }, []);
 
@@ -261,8 +266,14 @@ function SidebarInner() {
     if (!colocados.has(it.href)) { arrumadas[i].items.push(it); colocados.add(it.href); }
   }));
   // Uma secção esvaziada continua visível, para se poder voltar a largar itens nela.
-  const sections = arrumadas.filter((s, i) => s.items.length > 0 || base[i].items.length > 0);
-  const menuPersonalizado = Object.keys(layout).length > 0;
+  const visiveis = arrumadas.filter((s, i) => s.items.length > 0 || base[i].items.length > 0);
+  const posicaoSecao = (title: string | null) => {
+    if (!title) return -1; // Dashboard sempre primeiro
+    const i = ordemSecoes.indexOf(title);
+    return i === -1 ? ordemSecoes.length + navSections.findIndex((s) => s.title === title) : i;
+  };
+  const sections = [...visiveis].sort((a, b) => posicaoSecao(a.title) - posicaoSecao(b.title));
+  const menuPersonalizado = Object.keys(layout).length > 0 || ordemSecoes.length > 0;
 
   // Arrastar e largar (rato).
   const [aArrastar, setAArrastar] = useState<string | null>(null);
@@ -289,11 +300,29 @@ function SidebarInner() {
     guardarLayout(atual);
   };
 
-  const terminarArrasto = () => { setAArrastar(null); setAlvo(null); };
+  const [secaoAArrastar, setSecaoAArrastar] = useState<string | null>(null);
+  const [alvoSecao, setAlvoSecao] = useState<{ titulo: string; posicao: PosicaoLargar } | null>(null);
+
+  const moverSecao = (titulo: string, destino: string, posicao: PosicaoLargar) => {
+    const titulos = sections.map((sec) => sec.title).filter((t): t is string => !!t && t !== titulo);
+    let idx = titulos.indexOf(destino);
+    if (idx === -1) idx = titulos.length;
+    else if (posicao === 'depois') idx += 1;
+    titulos.splice(idx, 0, titulo);
+    setOrdemSecoes(titulos);
+    try { localStorage.setItem('sidebar_sections_order', JSON.stringify(titulos)); } catch {}
+  };
+
+  const terminarArrasto = () => { setAArrastar(null); setAlvo(null); setSecaoAArrastar(null); setAlvoSecao(null); };
 
   const reporMenu = () => {
     setLayout({});
-    try { localStorage.removeItem('sidebar_layout'); localStorage.removeItem('sidebar_order'); } catch {}
+    setOrdemSecoes([]);
+    try {
+      localStorage.removeItem('sidebar_layout');
+      localStorage.removeItem('sidebar_order');
+      localStorage.removeItem('sidebar_sections_order');
+    } catch {}
   };
 
   const itemIsActive = (item: NavItem) => {
@@ -374,11 +403,25 @@ function SidebarInner() {
           const secaoAlvo = !!aArrastar && alvo?.secao === chave;
           // Largar em cima do título ou do espaço vazio da secção → fica no fim dela.
           const sobreSecao = (e: React.DragEvent) => {
+            if (secaoAArrastar) {
+              if (!section.title || secaoAArrastar === section.title) return;
+              e.preventDefault();
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const posicao: PosicaoLargar = e.clientY < r.top + r.height / 2 ? 'antes' : 'depois';
+              if (alvoSecao?.titulo !== section.title || alvoSecao?.posicao !== posicao) setAlvoSecao({ titulo: section.title, posicao });
+              return;
+            }
             if (!aArrastar) return;
             e.preventDefault();
             if (alvo?.secao !== chave || alvo.href !== null) setAlvo({ secao: chave, href: null, posicao: 'depois' });
           };
           const largarNaSecao = (e: React.DragEvent) => {
+            if (secaoAArrastar) {
+              e.preventDefault();
+              if (section.title && secaoAArrastar !== section.title) moverSecao(secaoAArrastar, section.title, alvoSecao?.posicao ?? 'antes');
+              terminarArrasto();
+              return;
+            }
             if (!aArrastar) return;
             e.preventDefault();
             moverItem(aArrastar, chave, alvo?.secao === chave ? alvo.href : null, alvo?.posicao ?? 'depois');
@@ -390,16 +433,33 @@ function SidebarInner() {
             onDragOver={sobreSecao}
             onDrop={largarNaSecao}
             style={secaoAlvo ? { outline: `1px dashed ${cor}`, backgroundColor: cor + '14' } : undefined}
-            className="space-y-1 rounded-lg transition-colors"
+            className={cn('relative space-y-1 rounded-lg transition-colors', secaoAArrastar === section.title && 'opacity-40')}
           >
+            {secaoAArrastar && alvoSecao?.titulo === section.title && (
+              <div
+                className={cn('absolute left-2 right-2 h-0.5 rounded-full', alvoSecao?.posicao === 'antes' ? '-top-2' : '-bottom-2')}
+                style={{ backgroundColor: sectionColor(secaoAArrastar) }}
+              />
+            )}
             {section?.title && (
               <button
                 type="button"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', section.title);
+                  setSecaoAArrastar(section.title);
+                }}
+                onDragEnd={terminarArrasto}
                 onClick={() => toggleSection(section.title)}
+                title="Clique para abrir/fechar · arraste para mudar a ordem"
                 style={{ color: cor }}
-                className="w-full flex items-center justify-between px-3 pt-1 pb-0.5 text-[14px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity"
+                className="group/titulo w-full flex items-center justify-between px-3 pt-1 pb-0.5 text-[14px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
               >
-                <span>{section.title}</span>
+                <span className="flex items-center gap-1.5">
+                  <GripVertical className="-ml-2 h-3.5 w-3.5 opacity-0 group-hover/titulo:opacity-60 transition-opacity" />
+                  {section.title}
+                </span>
                 <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', isCollapsed && '-rotate-90')} />
               </button>
             )}
