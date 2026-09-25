@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Trash2, X, Upload, Download, Eye, Search, Camera, Loader2, CheckCircle2, AlertCircle, Pencil, Settings, Tag, RotateCcw, Printer, ChevronLeft, ChevronRight, Maximize2, Link2, Landmark, Receipt, CreditCard, Smartphone, RefreshCw, Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { MoloniSyncButton } from '@/components/moloni-sync-button';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { EmptyState } from '@/components/empty-state';
 import { toast } from 'sonner';
@@ -164,11 +163,6 @@ function FaturasPageInner() {
 
   // Vista de Faturas de Clientes (emitidas a clientes)
   const isClientesView = viewTipo === 'emitida' && viewOrigem === 'cliente';
-  // Botão Moloni: nos documentos de clientes importa esse tipo de documento;
-  // do lado dos fornecedores o Moloni só tem a lista de fornecedores.
-  const alvoMoloni = viewOrigem === 'cliente'
-    ? (viewTipo === 'emitida' ? 'faturas' : viewTipo === 'recibo' ? 'recibos' : viewTipo === 'nota' ? 'notas' : null)
-    : viewOrigem === 'fornecedor' && ['recebida', 'recibo', 'nota'].includes(viewTipo) ? 'fornecedores' : null;
   // Fatura anulada (não conta como emitida/validada)
   const isAnulada = (f: any) => (f?.estado || '').toLowerCase() === 'anulado';
   // Série LJOCC: faturas só emitidas depois de pagas -> auto-validadas (exceto anuladas)
@@ -881,7 +875,6 @@ function FaturasPageInner() {
     <div className="space-y-6">
       <PageHeader icon={FileText} title={pageTitle} description={`${viewFaturas.length} documentos registados`} action={
         <div className="flex gap-2">
-          {alvoMoloni && <MoloniSyncButton alvo={alvoMoloni} onDone={load} />}
           {isClientesView && (
             <button onClick={sincronizarPagamentos} disabled={sincronizando} className="flex items-center gap-2 px-4 py-2.5 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-60" title="Ir ao IfThenPay buscar pagamentos e marcar as faturas pagas">
               <RefreshCw className={`h-4 w-4 ${sincronizando ? 'animate-spin' : ''}`} />{sincronizando ? 'A sincronizar...' : 'Sincronizar pagamentos'}

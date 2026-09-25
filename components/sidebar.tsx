@@ -51,6 +51,8 @@ import { type AreaKey, type RolePermissions, DEFAULT_PERMISSIONS } from '@/lib/p
 type NavItem = {
   href: string;
   label: string;
+  // Item novo que deve aparecer no topo da secção mesmo num menu já personalizado.
+  primeiro?: boolean;
   icon: any;
   tipo?: string;
   origem?: string;
@@ -66,6 +68,7 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   ] },
   { title: 'Clientes', items: [
+    { href: '/painel-clientes', label: 'Dashboard', icon: LayoutDashboard, area: 'clientes', primeiro: true },
     { href: '/clientes', label: 'Clientes', icon: Users, area: 'clientes' },
     { href: '/faturas?tipo=emitida&origem=cliente', label: 'Faturas Clientes', icon: FileText, tipo: 'emitida', origem: 'cliente', sub: true, area: 'clientes' },
     { href: '/faturas?tipo=recibo&origem=cliente', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'cliente', sub: true, area: 'clientes' },
@@ -73,6 +76,7 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/recebimentos', label: 'Recebimentos', icon: ArrowDownCircle, area: 'clientes' },
   ] },
   { title: 'Fornecedores', items: [
+    { href: '/painel-fornecedores', label: 'Dashboard', icon: LayoutDashboard, area: 'fornecedores', primeiro: true },
     { href: '/fornecedores', label: 'Fornecedores', icon: Truck, area: 'fornecedores' },
     { href: '/faturas?tipo=recebida&origem=fornecedor', label: 'Faturas Fornecedores', icon: FileText, tipo: 'recebida', origem: 'fornecedor', sub: true, area: 'fornecedores' },
     { href: '/faturas?tipo=recibo&origem=fornecedor', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'fornecedor', sub: true, area: 'fornecedores' },
@@ -262,7 +266,10 @@ function SidebarInner() {
     return { ...s, items };
   });
   base.forEach((s, i) => s.items.forEach((it) => {
-    if (!colocados.has(it.href)) { arrumadas[i].items.push(it); colocados.add(it.href); }
+    if (!colocados.has(it.href)) {
+      if (it.primeiro) arrumadas[i].items.unshift(it); else arrumadas[i].items.push(it);
+      colocados.add(it.href);
+    }
   }));
   // Uma secção esvaziada continua visível, para se poder voltar a largar itens nela.
   const visiveis = arrumadas.filter((s, i) => s.items.length > 0 || base[i].items.length > 0);

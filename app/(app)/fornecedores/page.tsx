@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Truck, Plus, Edit2, Trash2, X, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { MoloniSyncButton } from '@/components/moloni-sync-button';
 import { EmptyState } from '@/components/empty-state';
 import { toast } from 'sonner';
 
@@ -69,7 +68,7 @@ export default function FornecedoresPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Truck} title="Fornecedores" description={`${fornecedores.length} fornecedores registados`} action={<div className="flex gap-2"><MoloniSyncButton alvo="fornecedores" onDone={load} /><button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="h-4 w-4" />Novo Fornecedor</button></div>} />
+      <PageHeader icon={Truck} title="Fornecedores" description={`${fornecedores.length} fornecedores registados`} action={<button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90"><Plus className="h-4 w-4" />Novo Fornecedor</button>} />
 
       {fornecedores.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-3">

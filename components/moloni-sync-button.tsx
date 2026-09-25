@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Botão "Sincronizar Moloni" para cada página: faz o mesmo que os botões da
-// página Moloni, mas só para o que essa página mostra.
+// Botão para ir buscar dados ao Moloni (usado nos dashboards de Clientes e
+// Fornecedores): faz o mesmo que os botões da página Moloni, só para um tipo.
 //   clientes     → importa/atualiza os clientes
 //   fornecedores → importa/atualiza os fornecedores
 //   faturas | recibos | notas → atualiza os clientes e importa esses documentos
@@ -19,7 +19,7 @@ const NOMES: Record<AlvoMoloni, string> = {
   notas: 'notas de crédito/débito',
 };
 
-export function MoloniSyncButton({ alvo, onDone }: { alvo: AlvoMoloni; onDone?: () => void }) {
+export function MoloniSyncButton({ alvo, label = 'Sincronizar Moloni', onDone }: { alvo: AlvoMoloni; label?: string; onDone?: () => void }) {
   const [aSincronizar, setASincronizar] = useState(false);
 
   const sincronizar = async () => {
@@ -60,7 +60,7 @@ export function MoloniSyncButton({ alvo, onDone }: { alvo: AlvoMoloni; onDone?: 
       title={`Ir ao Moloni buscar ${NOMES[alvo]}`}
     >
       <RefreshCw className={`h-4 w-4 ${aSincronizar ? 'animate-spin' : ''}`} />
-      {aSincronizar ? 'A sincronizar...' : 'Sincronizar Moloni'}
+      {aSincronizar ? 'A sincronizar...' : label}
     </button>
   );
 }
