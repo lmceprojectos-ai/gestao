@@ -92,7 +92,7 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
             <p className="text-xs text-muted-foreground mt-0.5">
               {clientes
                 ? 'Importa os documentos novos e atualiza os existentes (os clientes são atualizados primeiro).'
-                : 'O Moloni só tem os documentos emitidos pela empresa; do lado dos fornecedores atualiza a lista de fornecedores.'}
+                : 'Importa os documentos registados nas Compras do Moloni (os fornecedores são atualizados primeiro). Os que já estão na app com o mesmo NIF, número e valor não são duplicados.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -103,7 +103,11 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
                 <MoloniSyncButton alvo="notas" label="Notas de Crédito" onDone={carregar} />
               </>
             ) : (
-              <MoloniSyncButton alvo="fornecedores" label="Fornecedores" onDone={carregar} />
+              <>
+                <MoloniSyncButton alvo="fornecedor-faturas" label="Faturas" onDone={carregar} />
+                <MoloniSyncButton alvo="fornecedor-recibos" label="Recibos" onDone={carregar} />
+                <MoloniSyncButton alvo="fornecedor-notas" label="Notas de Crédito" onDone={carregar} />
+              </>
             )}
           </div>
         </div>

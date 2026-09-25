@@ -11,6 +11,7 @@ import {
   getMoloniDocuments,
   DOC_TYPES,
 } from '@/lib/moloni';
+import { syncDocumentosFornecedor, type GrupoFornecedor } from '@/lib/moloni-fornecedores';
 
 function moloniStatusLabel(status: number): string {
   switch (status) {
@@ -266,10 +267,11 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const body = await req.json();
-    // type: 'clientes', 'fornecedores', 'faturas', 'all'
+    // type: 'clientes', 'fornecedores', 'faturas', 'documentosFornecedor', 'all'
     // grupo (opcional, com 'faturas'): 'faturas' | 'recibos' | 'notas'
     // incluirClientes: atualiza os clientes antes, para ligar os documentos novos
-    const { type, grupo, incluirClientes } = body;
+    // incluirFornecedores: idem para os documentos de fornecedores
+    const { type, grupo, incluirClientes, incluirFornecedores } = body;
     if (grupo && !GRUPOS_DOCUMENTOS[grupo]) {
       return NextResponse.json({ error: 'Grupo de documentos inválido' }, { status: 400 });
     }
@@ -281,12 +283,16 @@ export async function POST(req: NextRequest) {
       results.clientes = await syncCustomers(companyId);
     }
 
-    if (type === 'fornecedores' || type === 'all') {
+    if (type === 'fornecedores' || type === 'all' || (type === 'documentosFornecedor' && incluirFornecedores)) {
       results.fornecedores = await syncSuppliers(companyId);
     }
 
     if (type === 'faturas' || type === 'all') {
       results.faturas = await syncDocuments(companyId, grupo);
+    }
+
+    if (type === 'documentosFornecedor') {
+      results.documentosFornecedor = await syncDocumentosFornecedor(companyId, grupo as GrupoFornecedor | undefined);
     }
 
     return NextResponse.json({ success: true, results });

@@ -9,7 +9,10 @@ import { toast } from 'sonner';
 //   clientes     → importa/atualiza os clientes
 //   fornecedores → importa/atualiza os fornecedores
 //   faturas | recibos | notas → atualiza os clientes e importa esses documentos
-export type AlvoMoloni = 'clientes' | 'fornecedores' | 'faturas' | 'recibos' | 'notas';
+//   fornecedor-faturas | fornecedor-recibos | fornecedor-notas → atualiza os
+//     fornecedores e importa esses documentos de fornecedor (Compras no Moloni)
+export type AlvoMoloni = 'clientes' | 'fornecedores' | 'faturas' | 'recibos' | 'notas'
+  | 'fornecedor-faturas' | 'fornecedor-recibos' | 'fornecedor-notas';
 
 const NOMES: Record<AlvoMoloni, string> = {
   clientes: 'clientes',
@@ -17,6 +20,9 @@ const NOMES: Record<AlvoMoloni, string> = {
   faturas: 'faturas',
   recibos: 'recibos',
   notas: 'notas de crédito/débito',
+  'fornecedor-faturas': 'faturas de fornecedores',
+  'fornecedor-recibos': 'recibos de fornecedores',
+  'fornecedor-notas': 'notas de crédito/débito de fornecedores',
 };
 
 export function MoloniSyncButton({ alvo, label = 'Sincronizar Moloni', onDone }: { alvo: AlvoMoloni; label?: string; onDone?: () => void }) {
@@ -26,9 +32,12 @@ export function MoloniSyncButton({ alvo, label = 'Sincronizar Moloni', onDone }:
     setASincronizar(true);
     const id = toast.loading(`A sincronizar ${NOMES[alvo]} com o Moloni...`);
     try {
+      const doFornecedor = alvo.startsWith('fornecedor-');
       const body = alvo === 'clientes' || alvo === 'fornecedores'
         ? { type: alvo }
-        : { type: 'faturas', grupo: alvo, incluirClientes: true };
+        : doFornecedor
+          ? { type: 'documentosFornecedor', grupo: alvo.replace('fornecedor-', ''), incluirFornecedores: true }
+          : { type: 'faturas', grupo: alvo, incluirClientes: true };
       const res = await fetch('/api/moloni/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,9 +48,10 @@ export function MoloniSyncButton({ alvo, label = 'Sincronizar Moloni', onDone }:
         toast.error(data?.error || 'Erro na sincronização com o Moloni', { id });
         return;
       }
-      const r = alvo === 'clientes' || alvo === 'fornecedores' ? data.results[alvo] : data.results.faturas;
+      const r = alvo === 'clientes' || alvo === 'fornecedores' ? data.results[alvo]
+        : doFornecedor ? data.results.documentosFornecedor : data.results.faturas;
       const erros: string[] = r?.errors ?? [];
-      const resumo = `${r?.imported ?? 0} novo(s), ${r?.updated ?? 0} atualizado(s)`;
+      const resumo = `${r?.imported ?? 0} novo(s), ${r?.updated ?? 0} atualizado(s)${r?.linked ? `, ${r.linked} já existente(s) ligado(s)` : ''}`;
       if (erros.length) toast.warning(`Moloni: ${resumo}, ${erros.length} erro(s). ${erros[0]}`, { id, duration: 10000 });
       else toast.success(`Moloni sincronizado: ${resumo}`, { id });
       onDone?.();
