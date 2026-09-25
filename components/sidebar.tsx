@@ -174,8 +174,7 @@ function NavItemArrastavel({
         <Link
           href={item?.href ?? '/'}
           onClick={onNavigate}
-          draggable={false}
-          className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0 select-none [-webkit-user-drag:none]', item?.sub ? 'pl-2' : 'pl-0')}
+          className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0 select-none', item?.sub ? 'pl-2' : 'pl-0')}
         >
           {Icon && <Icon style={{ color }} className={cn('flex-shrink-0 transition-colors', item?.sub ? 'h-3.5 w-3.5' : 'h-4 w-4')} />}
           <span className="truncate">{item?.label}</span>
@@ -442,9 +441,13 @@ function SidebarInner() {
               />
             )}
             {section?.title && (
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 draggable
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSection(section.title); }
+                }}
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = 'move';
                   e.dataTransfer.setData('text/plain', section.title);
@@ -461,7 +464,7 @@ function SidebarInner() {
                   {section.title}
                 </span>
                 <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', isCollapsed && '-rotate-90')} />
-              </button>
+              </div>
             )}
             <AnimatePresence initial={false}>
               {!isCollapsed && (
@@ -553,7 +556,7 @@ function SidebarInner() {
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-[#1e3a5f] z-40">
-        <NavContent />
+        {NavContent()}
       </aside>
 
       {/* Mobile sidebar */}
@@ -580,7 +583,7 @@ function SidebarInner() {
               >
                 <X className="h-5 w-5" />
               </button>
-              <NavContent />
+              {NavContent()}
             </motion.aside>
           </>
         )}
