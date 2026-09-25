@@ -151,10 +151,19 @@ async function syncSuppliers(companyId: number) {
 // Apenas importamos documentos com data de emissão a partir de 2026
 const ANO_MINIMO_IMPORTACAO = 2026;
 
-async function syncDocuments(companyId: number) {
+// Grupos de documentos usados pelos botões de cada página.
+const GRUPOS_DOCUMENTOS: Record<string, string[]> = {
+  faturas: ['invoices', 'invoiceReceipts', 'simplifiedInvoices'],
+  recibos: ['receipts'],
+  notas: ['creditNotes', 'debitNotes'],
+};
+
+async function syncDocuments(companyId: number, grupo?: string) {
   const result = { imported: 0, updated: 0, skipped: 0, errors: [] as string[], byType: {} as Record<string, { imported: number; updated: number }> };
   try {
+    const endpoints = grupo ? GRUPOS_DOCUMENTOS[grupo] : null;
     for (const docType of DOC_TYPES) {
+      if (endpoints && !endpoints.includes(docType.endpoint)) continue;
       const typeResult = { imported: 0, updated: 0 };
       let offset = 0;
       let hasMore = true;
@@ -257,12 +266,18 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const body = await req.json();
-    const { type } = body; // 'clientes', 'fornecedores', 'faturas', 'all'
+    // type: 'clientes', 'fornecedores', 'faturas', 'all'
+    // grupo (opcional, com 'faturas'): 'faturas' | 'recibos' | 'notas'
+    // incluirClientes: atualiza os clientes antes, para ligar os documentos novos
+    const { type, grupo, incluirClientes } = body;
+    if (grupo && !GRUPOS_DOCUMENTOS[grupo]) {
+      return NextResponse.json({ error: 'Grupo de documentos inválido' }, { status: 400 });
+    }
 
     const companyId = await getMoloniCompanyId();
     const results: Record<string, any> = {};
 
-    if (type === 'clientes' || type === 'all') {
+    if (type === 'clientes' || type === 'all' || (type === 'faturas' && incluirClientes)) {
       results.clientes = await syncCustomers(companyId);
     }
 
@@ -271,7 +286,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'faturas' || type === 'all') {
-      results.faturas = await syncDocuments(companyId);
+      results.faturas = await syncDocuments(companyId, grupo);
     }
 
     return NextResponse.json({ success: true, results });
