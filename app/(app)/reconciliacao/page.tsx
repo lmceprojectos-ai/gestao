@@ -18,6 +18,10 @@ export default function ReconciliacaoPage() {
   const [showAddMov, setShowAddMov] = useState(false);
   const [selectedMov, setSelectedMov] = useState<any>(null);
   const [selectedContaFilter, setSelectedContaFilter] = useState('');
+  // Lado direito: por defeito só aparece o que corresponde ao movimento escolhido.
+  const [mostrarTodos, setMostrarTodos] = useState(false);
+  const [procuraRec, setProcuraRec] = useState('');
+  const escolherMovimento = (m: any) => { setSelectedMov(m); setMostrarTodos(false); setProcuraRec(''); };
   // Modo de reconciliação: por movimento (clássico) ou por fatura (escolhe fatura e sugere movimento)
   const [modo, setModo] = useState<'movimento' | 'fatura'>('movimento');
   const [selectedFatura, setSelectedFatura] = useState<any>(null);
@@ -143,6 +147,49 @@ export default function ReconciliacaoPage() {
 
   const movimentosNaoReconciliados = (movimentos ?? []).filter((m: any) => !m?.reconciliado);
 
+  // ---- Modo "por movimento": sugestões para o movimento selecionado ----
+  // Palavras úteis da descrição do banco (ex.: "COMPRA SHOPIFY* 593167089" → shopify, 593167089).
+  const PALAVRAS_BANCO = new Set(['compra', 'trf', 'ips', 'sepa', 'pag', 'pagamento', 'serv', 'com', 'estr', 'lda', 'unip', 'way', 'debito', 'credito', 'transf']);
+  const palavrasMov = String(selectedMov?.descricao || '').toLowerCase().split(/[^a-z0-9à-ú]+/i)
+    .filter((p) => p.length >= 3 && !PALAVRAS_BANCO.has(p));
+  const semelhancaNome = (texto: string) => {
+    const t = texto.toLowerCase();
+    return palavrasMov.reduce((n, p) => n + (t.includes(p) ? 1 : 0), 0);
+  };
+  const pq = procuraRec.trim().toLowerCase();
+  // Devolve a lista a mostrar e quantos têm o valor exato do movimento.
+  // Sem pesquisa nem "mostrar todos": só os de valor igual; se não houver nenhum,
+  // os que coincidem no nome (ex.: fatura com valor diferente por câmbio ou comissão).
+  const sugerir = (lista: any[], valorDe: (x: any) => number, dataDe: (x: any) => any, textoDe: (x: any) => string) => {
+    const alvo = Number(selectedMov?.valor || 0);
+    const tMov = selectedMov?.dataMovimento ? new Date(selectedMov.dataMovimento).getTime() : 0;
+    const itens = (lista ?? []).map((x: any) => {
+      const texto = textoDe(x);
+      return {
+        x,
+        texto,
+        igual: Math.abs((valorDe(x) || 0) - alvo) < 0.01,
+        nome: semelhancaNome(texto),
+        dias: dataDe(x) ? Math.abs(new Date(dataDe(x)).getTime() - tMov) / 86400000 : 99999,
+      };
+    }).sort((a, b) => (Number(b.igual) - Number(a.igual)) || (b.nome - a.nome) || (a.dias - b.dias));
+    const iguais = itens.filter((i) => i.igual).length;
+    let visiveis = itens;
+    if (pq) visiveis = itens.filter((i) => i.texto.toLowerCase().includes(pq));
+    else if (!mostrarTodos) visiveis = iguais > 0 ? itens.filter((i) => i.igual) : itens.filter((i) => i.nome > 0).slice(0, 5);
+    return { itens: visiveis.map((i) => i.x), iguais, total: itens.length };
+  };
+  const textoFatura = (f: any) => `${f?.numero || ''} ${f?.cliente?.nome || f?.fornecedor?.nome || f?.entidadeNome || ''} ${f?.descricao || ''} ${f?.saldoPendente ?? f?.valor ?? ''}`;
+  const sugFatCli = sugerir(faturasClientes, (f) => f?.saldoPendente ?? f?.valor, (f) => f?.dataEmissao, textoFatura);
+  const sugRec = sugerir(recebimentos, (r) => r?.valor, (r) => r?.dataRecebimento, (r) => `${r?.descricao || ''} ${r?.valor ?? ''}`);
+  const sugFatForn = sugerir(faturasPendentes, (f) => f?.saldoPendente ?? f?.valor, (f) => f?.dataEmissao, textoFatura);
+  const sugPag = sugerir(pagamentos, (p) => p?.valor, (p) => p?.dataPagamento, (p) => `${p?.descricao || ''} ${p?.fatura?.numero || ''} ${p?.valor ?? ''}`);
+  const sugestoesMov = selectedMov?.tipo === 'credito' ? [sugFatCli, sugRec] : [sugFatForn, sugPag];
+  const totalIguais = sugestoesMov.reduce((n, x) => n + x.iguais, 0);
+  const totalVisiveis = sugestoesMov.reduce((n, x) => n + x.itens.length, 0);
+  const totalGeral = sugestoesMov.reduce((n, x) => n + x.total, 0);
+  const vazioFiltrado = (texto: string) => <p className="text-xs text-muted-foreground">{pq ? 'Nada encontrado com essa pesquisa' : mostrarTodos ? texto : 'Nenhum com o mesmo valor'}</p>;
+
   // ---- Modo "por fatura": lista combinada de faturas pendentes ----
   const faturasCombinadas = [
     ...(faturasClientes ?? []).map((f: any) => ({ ...f, __tf: 'cliente' as const })),
@@ -199,7 +246,7 @@ export default function ReconciliacaoPage() {
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
               {movimentosNaoReconciliados.map((m: any) => (
-                <div key={m?.id} onClick={() => setSelectedMov(m)} className={`p-3 rounded-lg cursor-pointer transition-all ${selectedMov?.id === m?.id ? 'bg-primary/10 ring-2 ring-primary' : 'bg-muted/30 hover:bg-muted/50'}`}>
+                <div key={m?.id} onClick={() => escolherMovimento(m)} className={`p-3 rounded-lg cursor-pointer transition-all ${selectedMov?.id === m?.id ? 'bg-primary/10 ring-2 ring-primary' : 'bg-muted/30 hover:bg-muted/50'}`}>
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-sm font-medium">{m?.descricao}</p>
@@ -223,13 +270,35 @@ export default function ReconciliacaoPage() {
             <p className="text-sm text-muted-foreground py-4">Clique num movimento bancário à esquerda para iniciar a reconciliação.</p>
           ) : (
             <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <p className="text-sm">
+                  <span className="font-medium">{selectedMov?.descricao}</span>{' '}
+                  <span className={`font-mono font-bold ${selectedMov?.tipo === 'credito' ? 'text-emerald-700' : 'text-red-700'}`}>{selectedMov?.tipo === 'credito' ? '+' : '-'}{formatCurrency(selectedMov?.valor)}</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {pq ? `${totalVisiveis} resultado(s) da pesquisa`
+                    : mostrarTodos ? `A mostrar todos os ${totalGeral} pendentes (os de valor igual primeiro)`
+                    : totalIguais > 0 ? `${totalIguais} com o mesmo valor (${formatCurrency(selectedMov?.valor)})`
+                    : totalVisiveis > 0 ? 'Nenhum com o mesmo valor; sugestões pelo nome'
+                    : 'Nenhum pendente com o mesmo valor ou nome'}
+                </p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <input value={procuraRec} onChange={(e) => setProcuraRec(e.target.value)} placeholder="Procurar número, entidade, valor..." className="w-full pl-8 pr-2 py-1.5 border border-input rounded-lg text-xs bg-background text-foreground" />
+                  </div>
+                  <button onClick={() => setMostrarTodos((v) => !v)} className="flex items-center gap-1 px-3 py-1.5 border border-input rounded-lg text-xs font-medium bg-background hover:bg-muted shrink-0">
+                    <ListFilter className="h-3.5 w-3.5" />{mostrarTodos ? 'Só correspondentes' : `Mostrar todos (${totalGeral})`}
+                  </button>
+                </div>
+              </div>
               {selectedMov?.tipo === 'credito' && (
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-semibold mb-2 text-blue-700 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Faturas de Clientes Pendentes</h3>
-                    {(faturasClientes?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Sem faturas de clientes pendentes</p> : (
+                    {sugFatCli.itens.length === 0 ? vazioFiltrado('Sem faturas de clientes pendentes') : (
                       <div className="space-y-2">
-                        {faturasClientes.map((f: any) => {
+                        {sugFatCli.itens.map((f: any) => {
                           const valorMatch = Math.abs((f?.saldoPendente ?? f?.valor ?? 0) - (selectedMov?.valor || 0)) < 0.01;
                           return (
                             <div key={f?.id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${valorMatch ? 'bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-300' : 'bg-muted/30 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}>
@@ -250,9 +319,9 @@ export default function ReconciliacaoPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold mb-2 text-emerald-700">Recebimentos pendentes</h3>
-                    {(recebimentos?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Sem recebimentos pendentes</p> : (
+                    {sugRec.itens.length === 0 ? vazioFiltrado('Sem recebimentos pendentes') : (
                       <div className="space-y-2">
-                        {recebimentos.map((r: any) => (
+                        {sugRec.itens.map((r: any) => (
                           <div key={r?.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
                             <div><p className="text-sm font-medium">{r?.descricao}</p><p className="text-xs text-muted-foreground">{formatCurrency(r?.valor)} • {formatDate(r?.dataRecebimento)}</p></div>
                             <button onClick={() => handleReconciliar(selectedMov?.id, r?.id, null)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700"><Link2 className="h-3 w-3" />Reconciliar</button>
@@ -267,10 +336,10 @@ export default function ReconciliacaoPage() {
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-sm font-semibold mb-2 text-amber-700 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Faturas de Fornecedor Pendentes</h3>
-                    {(faturasPendentes?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Sem faturas pendentes</p> : (
+                    {sugFatForn.itens.length === 0 ? vazioFiltrado('Sem faturas pendentes') : (
                       <div className="space-y-2">
-                        {faturasPendentes.map((f: any) => {
-                          const valorMatch = Math.abs((f?.valor || 0) - (selectedMov?.valor || 0)) < 0.01;
+                        {sugFatForn.itens.map((f: any) => {
+                          const valorMatch = Math.abs((f?.saldoPendente ?? f?.valor ?? 0) - (selectedMov?.valor || 0)) < 0.01;
                           return (
                             <div key={f?.id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${valorMatch ? 'bg-amber-50 dark:bg-amber-900/20 ring-1 ring-amber-300' : 'bg-muted/30 hover:bg-amber-50 dark:hover:bg-amber-900/20'}`}>
                               <div>
@@ -290,9 +359,9 @@ export default function ReconciliacaoPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold mb-2 text-red-700">Pagamentos pendentes</h3>
-                    {(pagamentos?.length ?? 0) === 0 ? <p className="text-xs text-muted-foreground">Sem pagamentos pendentes</p> : (
+                    {sugPag.itens.length === 0 ? vazioFiltrado('Sem pagamentos pendentes') : (
                       <div className="space-y-2">
-                        {pagamentos.map((p: any) => (
+                        {sugPag.itens.map((p: any) => (
                           <div key={p?.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                             <div><p className="text-sm font-medium">{p?.descricao}</p><p className="text-xs text-muted-foreground">{formatCurrency(p?.valor)} • {formatDate(p?.dataPagamento)}{p?.fatura?.numero ? ` • Fatura: ${p.fatura.numero}` : ''}</p></div>
                             <button onClick={() => handleReconciliar(selectedMov?.id, null, p?.id)} className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700"><Link2 className="h-3 w-3" />Reconciliar</button>
