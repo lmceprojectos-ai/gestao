@@ -159,7 +159,7 @@ function NavItemArrastavel({
         onDragEnd={onDragEnd}
         style={{ backgroundColor: isActive ? color + '2e' : undefined }}
         className={cn(
-          'group flex items-center rounded-lg text-[14px] font-medium transition-all duration-150',
+          'group flex items-center rounded-lg text-[14px] font-medium transition-all duration-150 select-none cursor-grab active:cursor-grabbing',
           isActive ? 'text-white shadow-sm' : 'text-white/75 hover:bg-white/10 hover:text-white',
           aArrastar && 'opacity-40'
         )}
@@ -175,7 +175,7 @@ function NavItemArrastavel({
           href={item?.href ?? '/'}
           onClick={onNavigate}
           draggable={false}
-          className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0', item?.sub ? 'pl-2' : 'pl-0')}
+          className={cn('flex items-center gap-3 py-2.5 pr-3 flex-1 min-w-0 select-none [-webkit-user-drag:none]', item?.sub ? 'pl-2' : 'pl-0')}
         >
           {Icon && <Icon style={{ color }} className={cn('flex-shrink-0 transition-colors', item?.sub ? 'h-3.5 w-3.5' : 'h-4 w-4')} />}
           <span className="truncate">{item?.label}</span>
@@ -454,7 +454,7 @@ function SidebarInner() {
                 onClick={() => toggleSection(section.title)}
                 title="Clique para abrir/fechar · arraste para mudar a ordem"
                 style={{ color: cor }}
-                className="group/titulo w-full flex items-center justify-between px-3 pt-1 pb-0.5 text-[14px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+                className="group/titulo select-none w-full flex items-center justify-between px-3 pt-1 pb-0.5 text-[14px] font-semibold uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
               >
                 <span className="flex items-center gap-1.5">
                   <GripVertical className="-ml-2 h-3.5 w-3.5 opacity-0 group-hover/titulo:opacity-60 transition-opacity" />
