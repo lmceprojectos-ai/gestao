@@ -17,6 +17,10 @@ import { prisma } from '@/lib/db';
 // como o saldo real do banco NESSA data, pelo que apenas os movimentos
 // posteriores a essa data (estritamente > dataSaldoInicial) são somados.
 // Assim, o histórico anterior à data de referência não altera o saldo.
+//
+// Se a conta tiver movimentos bancários importados dos extratos (posteriores à
+// data de referência), são eles a fonte do saldo, porque refletem o banco:
+//   saldoAtual = saldoInicial + créditos - débitos dos movimentos bancários
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
@@ -51,8 +55,14 @@ export async function POST() {
         prisma.transferenciaInterna.aggregate({ _sum: { valor: true }, where: transfOutWhere }),
       ]);
 
-      const saldoNovo =
-        (conta.saldoInicial ?? 0) +
+      const movWhere: any = { contaBancariaId: conta.id };
+      if (ref) movWhere.dataMovimento = { gt: ref };
+      const movs = await prisma.movimentoBancario.findMany({ where: movWhere, select: { valor: true, tipo: true } });
+
+      const saldoNovo = movs.length > 0
+        ? (conta.saldoInicial ?? 0) +
+          movs.reduce((t, m) => t + (m.tipo === 'debito' ? -Math.abs(m.valor) : Math.abs(m.valor)), 0)
+        : (conta.saldoInicial ?? 0) +
         (rec._sum.valor ?? 0) -
         (pag._sum.valor ?? 0) -
         (desp._sum.valor ?? 0) +

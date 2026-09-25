@@ -144,6 +144,9 @@ export default function ImportarExtratoPage() {
 
   const contasAtivas = useMemo(() => contas.filter((c: any) => c?.ativa), [contas]);
 
+  // Coluna do saldo após cada movimento (quase todos os extratos a têm).
+  const colunaSaldo = useMemo(() => columns.find((c) => /saldo/i.test(c) && !/dispon/i.test(c)) || '', [columns]);
+
   /* Movimentos processados a partir do mapeamento automático */
   const parsedMovimentos = useMemo(() => rows.map((row) => {
     const data = parsePortugueseDate(row[mapping.data] || '');
@@ -166,10 +169,40 @@ export default function ImportarExtratoPage() {
       valor = Math.abs(v);
       tipo = v < 0 ? 'debito' : 'credito';
     }
-    return { data, descricao, valor, tipo, valid: !!data && valor > 0 };
-  }), [rows, mapping]);
+    const saldoTxt = colunaSaldo ? (row[colunaSaldo] || '').trim() : '';
+    const saldo = saldoTxt ? parsePortugueseNumber(saldoTxt) : null;
+    return { data, descricao, valor, tipo, saldo, valid: !!data && valor > 0 };
+  }), [rows, mapping, colunaSaldo]);
 
   const validMovimentos = useMemo(() => parsedMovimentos.filter((m) => m.valid), [parsedMovimentos]);
+
+  // Verificação pelo saldo: em cada linha, saldo anterior + movimento = saldo.
+  // Deteta a ordem do extrato (mais antigo primeiro ou mais recente primeiro),
+  // as linhas que não batem certo e a diferença total (movimentos em falta ou mal lidos).
+  const verificacao = useMemo(() => {
+    const ms = validMovimentos.filter((m) => m.saldo !== null) as (typeof validMovimentos[number] & { saldo: number })[];
+    if (!colunaSaldo || ms.length < 2 || ms.length < validMovimentos.length * 0.8) return null;
+    const sinal = (m: { valor: number; tipo: string }) => (m.tipo === 'credito' ? m.valor : -m.valor);
+    const bate = (a: number, b: number) => Math.abs(a - b) <= 0.011;
+    let okAsc = 0, okDesc = 0;
+    for (let i = 1; i < ms.length; i++) {
+      if (bate(ms[i - 1].saldo + sinal(ms[i]), ms[i].saldo)) okAsc++;
+      if (bate(ms[i].saldo + sinal(ms[i - 1]), ms[i - 1].saldo)) okDesc++;
+    }
+    const asc = okAsc >= okDesc;
+    const falhas = new Set<number>();
+    for (let i = 1; i < ms.length; i++) {
+      const ok = asc ? bate(ms[i - 1].saldo + sinal(ms[i]), ms[i].saldo) : bate(ms[i].saldo + sinal(ms[i - 1]), ms[i - 1].saldo);
+      if (!ok) falhas.add(validMovimentos.indexOf(asc ? ms[i] : ms[i - 1]));
+    }
+    const primeiro = asc ? ms[0] : ms[ms.length - 1];
+    const ultimo = asc ? ms[ms.length - 1] : ms[0];
+    const saldoInicial = Math.round((primeiro.saldo - sinal(primeiro)) * 100) / 100;
+    const saldoFinal = ultimo.saldo;
+    const somaMov = Math.round(validMovimentos.reduce((t, m) => t + sinal(m), 0) * 100) / 100;
+    const diferenca = Math.round((saldoFinal - saldoInicial - somaMov) * 100) / 100;
+    return { saldoInicial, saldoFinal, somaMov, diferenca, falhas, confere: falhas.size === 0 && Math.abs(diferenca) <= 0.01 };
+  }, [validMovimentos, colunaSaldo]);
 
   const periodo = useMemo(() => {
     const dates = validMovimentos.map((m) => m.data).filter(Boolean).sort();
@@ -445,6 +478,28 @@ export default function ImportarExtratoPage() {
               </div>
             </div>
 
+            {/* Verificação pelo saldo */}
+            {verificacao && (
+              <div className={`rounded-2xl p-5 border text-sm ${verificacao.confere ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300' : 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200'}`}>
+                <p className="font-semibold flex items-center gap-2">
+                  {verificacao.confere ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                  {verificacao.confere ? 'Saldos confirmados: o extrato foi lido corretamente.' : 'Os saldos não batem certo: há movimentos mal lidos ou em falta.'}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
+                  <span>Saldo inicial: <strong>{formatCurrency(verificacao.saldoInicial)}</strong></span>
+                  <span>Movimentos: <strong>{verificacao.somaMov >= 0 ? '+' : ''}{formatCurrency(verificacao.somaMov)}</strong></span>
+                  <span>Saldo final do extrato: <strong>{formatCurrency(verificacao.saldoFinal)}</strong></span>
+                  {!verificacao.confere && <span>Diferença: <strong>{formatCurrency(verificacao.diferenca)}</strong></span>}
+                </div>
+                {!verificacao.confere && (
+                  <p className="mt-2">
+                    {verificacao.falhas.size > 0 && <>As linhas assinaladas a amarelo na lista abaixo não batem com o saldo. </>}
+                    Confira-as no extrato antes de importar. Se forem muitas, leia o PDF outra vez (Recomeçar) ou, melhor, importe o extrato em Excel/CSV.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Pré-visualização */}
             <div className="bg-card rounded-2xl p-5 shadow-sm border">
               <h2 className="text-lg font-semibold flex items-center gap-2 mb-4"><Table2 className="h-5 w-5 text-slate-700" />Pré-visualização ({validMovimentos.length} de {parsedMovimentos.length} linhas)</h2>
@@ -456,23 +511,25 @@ export default function ImportarExtratoPage() {
                       <th className="text-left font-medium px-3 py-2">Data</th>
                       <th className="text-right font-medium px-3 py-2">Valor</th>
                       <th className="text-left font-medium px-3 py-2">Descrição</th>
+                      {verificacao && <th className="text-right font-medium px-3 py-2">Saldo</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {validMovimentos.slice(0, 20).map((m, i) => (
-                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                    {validMovimentos.slice(0, verificacao && !verificacao.confere ? 500 : 20).map((m, i) => (
+                      <tr key={i} className={`border-b last:border-0 hover:bg-muted/30 ${verificacao?.falhas.has(i) ? 'bg-amber-100/70 dark:bg-amber-900/30' : ''}`}>
                         <td className="px-3 py-2.5 text-muted-foreground">{i + 1}</td>
                         <td className="px-3 py-2.5">{formatDisplayDate(m.data)}</td>
                         <td className={`px-3 py-2.5 text-right font-mono font-medium ${m.tipo === 'credito' ? 'text-emerald-600' : 'text-red-600'}`}>
                           {m.tipo === 'debito' ? '-' : ''}{formatCurrency(m.valor)}
                         </td>
                         <td className="px-3 py-2.5">{m.descricao || '-'}</td>
+                        {verificacao && <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{m.saldo !== null ? formatCurrency(m.saldo) : '-'}</td>}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {validMovimentos.length > 20 && <p className="text-center text-xs text-muted-foreground pt-3">A mostrar 20 de {validMovimentos.length} linhas</p>}
+              {validMovimentos.length > 20 && (!verificacao || verificacao.confere) && <p className="text-center text-xs text-muted-foreground pt-3">A mostrar 20 de {validMovimentos.length} linhas</p>}
             </div>
 
             <div className="flex gap-2">

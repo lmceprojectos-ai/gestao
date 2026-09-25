@@ -43,19 +43,15 @@ export default function MovimentosBancariosPage() {
   const [search, setSearch] = useState('');
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'credito' | 'debito'>('todos');
 
-  // Carregar contas uma vez e escolher a primeira conta ativa por defeito.
+  // Carregar contas uma vez. Por defeito mostram-se todas as contas.
   useEffect(() => {
     (async () => {
       try {
         const c: Conta[] = await fetch('/api/contas').then((x) => x.json());
         const lista = Array.isArray(c) ? c : [];
         setContas(lista);
-        const primeiraAtiva = lista.find((x) => x.ativa) || lista[0];
-        if (primeiraAtiva) setContaId(primeiraAtiva.id);
-        else setLoading(false);
       } catch (e) {
         console.error(e);
-        setLoading(false);
       }
     })();
   }, []);

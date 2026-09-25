@@ -157,7 +157,11 @@ Devolve APENAS um JSON com a seguinte estrutura:
 }
 
 Regras:
-- Extrai TODOS os movimentos, não apenas alguns
+- Extrai TODOS os movimentos de TODAS as páginas, pela ordem em que aparecem no extrato, não apenas alguns
+- Copia cada valor e cada saldo exatamente como está impresso (dígito a dígito); não calcules nem arredondes
+- Em cada linha, o "saldo" é o saldo impresso nessa linha, depois do movimento
+- Confirma no fim: saldo da linha anterior + crédito − débito deve dar o saldo de cada linha. Se não der, voltaste a ler mal um valor ou saltaste uma linha: corrige antes de responder
+- Não incluas linhas de "saldo inicial", "saldo anterior", "saldo final" nem totais como movimentos
 - Usa o formato DD/MM/YYYY para as datas
 - Para valores, usa o formato português (ex: 1.234,56)
 - Se o extrato usar coluna única de valor: positivo vai para "credito", negativo (sem sinal) vai para "debito"
@@ -168,7 +172,7 @@ Regras:
       let content: string;
       try {
         const t0 = Date.now();
-        content = await perguntarIA({ prompt, anexos: [{ tipo: 'pdf', base64 }], maxTokens: 64000, esforco: 'low' });
+        content = await perguntarIA({ prompt, anexos: [{ tipo: 'pdf', base64 }], maxTokens: 64000, esforco: 'medium' });
         console.log(`Extrato PDF lido pela IA em ${Math.round((Date.now() - t0) / 1000)}s (${file.name}, ${Math.round(file.size / 1024)} KB)`);
       } catch (e: any) {
         console.error('LLM API error for PDF:', e?.message);
