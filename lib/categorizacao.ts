@@ -153,7 +153,7 @@ Orientação importante:
 Responde apenas com o JSON.`;
 
   try {
-    const content = await perguntarIA({ prompt, maxTokens: 4000 });
+    const content = await perguntarIA({ prompt, maxTokens: 4000, esforco: 'low' });
     let slug: string | null = null;
     try {
       const obj = JSON.parse(content);

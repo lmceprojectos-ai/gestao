@@ -61,7 +61,7 @@ Responde APENAS com JSON puro, sem markdown nem texto adicional, com esta estrut
 
     let content = "";
     try {
-      content = await perguntarIA({ prompt: instructions, anexos: [{ tipo: "pdf", base64 }] });
+      content = await perguntarIA({ prompt: instructions, anexos: [{ tipo: "pdf", base64 }], esforco: "low" });
     } catch (e: any) {
       console.error("Erro do serviço de leitura de PDF:", e?.message);
       return NextResponse.json(

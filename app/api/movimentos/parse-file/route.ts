@@ -167,7 +167,9 @@ Regras:
 
       let content: string;
       try {
-        content = await perguntarIA({ prompt, anexos: [{ tipo: 'pdf', base64 }], maxTokens: 64000 });
+        const t0 = Date.now();
+        content = await perguntarIA({ prompt, anexos: [{ tipo: 'pdf', base64 }], maxTokens: 64000, esforco: 'low' });
+        console.log(`Extrato PDF lido pela IA em ${Math.round((Date.now() - t0) / 1000)}s (${file.name}, ${Math.round(file.size / 1024)} KB)`);
       } catch (e: any) {
         console.error('LLM API error for PDF:', e?.message);
         return NextResponse.json(

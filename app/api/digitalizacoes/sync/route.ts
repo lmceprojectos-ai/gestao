@@ -17,6 +17,11 @@ const TEMPO_MAX_MS = 15000;
 
 export async function POST(req: NextRequest) {
   const inicio = Date.now();
+  // Modo "voltar a ler os erros": só reprocessa digitalizações com erro que ainda
+  // não foram tentadas desde 'desde' (início da ronda no navegador), para não repetir.
+  const soErros = req.nextUrl.searchParams.get('erros') === '1';
+  const desdeParam = req.nextUrl.searchParams.get('desde');
+  const desde = desdeParam ? new Date(desdeParam) : null;
 
   // Autorização: sessão de utilizador OU chave de tarefa agendada.
   const cronKey = req.headers.get('x-cron-key');
@@ -38,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const existentes = await prisma.digitalizacaoImportada.findMany({
-      select: { id: true, driveItemId: true, estado: true, cloudStoragePath: true },
+      select: { id: true, driveItemId: true, estado: true, cloudStoragePath: true, updatedAt: true },
     });
     const conhecidos = new Map(existentes.map((e) => [e.driveItemId, e]));
 
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
         const existente = conhecidos.get(f.id);
         if (!existente) {
           nuncaVistos.push({ f, pasta, modulo });
-        } else if (existente.estado === 'erro') {
+        } else if (existente.estado === 'erro' && (!desde || existente.updatedAt < desde)) {
           emErro.push({ f, pasta, modulo });
         }
         // Restantes (já importados) são ignorados.
@@ -126,13 +131,13 @@ export async function POST(req: NextRequest) {
             where: { id: existente.id },
             data: dadosComuns,
           });
-          conhecidos.set(f.id, { id: existente.id, driveItemId: f.id, estado, cloudStoragePath });
+          conhecidos.set(f.id, { id: existente.id, driveItemId: f.id, estado, cloudStoragePath, updatedAt: new Date() });
         } else {
           const criado = await prisma.digitalizacaoImportada.create({
             data: { driveItemId: f.id, criadoPor, ...dadosComuns },
             select: { id: true },
           });
-          conhecidos.set(f.id, { id: criado.id, driveItemId: f.id, estado, cloudStoragePath });
+          conhecidos.set(f.id, { id: criado.id, driveItemId: f.id, estado, cloudStoragePath, updatedAt: new Date() });
         }
       } catch (e: any) {
         console.error(`Erro a processar ${f.name}:`, e?.message);
@@ -161,7 +166,7 @@ export async function POST(req: NextRequest) {
               },
               select: { id: true },
             });
-            conhecidos.set(f.id, { id: criado.id, driveItemId: f.id, estado: 'erro', cloudStoragePath: null });
+            conhecidos.set(f.id, { id: criado.id, driveItemId: f.id, estado: 'erro', cloudStoragePath: null, updatedAt: new Date() });
           }
         } catch {
           /* ignora se já existir */
@@ -172,7 +177,7 @@ export async function POST(req: NextRequest) {
     // 2. Fase A — ficheiros nunca vistos (prioritários). Determina se ainda
     //    falta trabalho (o cliente volta a chamar enquanto for verdadeiro).
     let maisPorProcessar = false;
-    for (const item of nuncaVistos) {
+    for (const item of soErros ? [] : nuncaVistos) {
       if (resumo.processados >= MAX_POR_EXECUCAO || Date.now() - inicio > TEMPO_MAX_MS) {
         maisPorProcessar = true;
         break;
@@ -183,7 +188,10 @@ export async function POST(req: NextRequest) {
     // 3. Fase B — reprocessar erros só se ainda houver orçamento nesta chamada.
     if (!maisPorProcessar) {
       for (const item of emErro) {
-        if (resumo.processados >= MAX_POR_EXECUCAO || Date.now() - inicio > TEMPO_MAX_MS) break;
+        if (resumo.processados >= MAX_POR_EXECUCAO || Date.now() - inicio > TEMPO_MAX_MS) {
+          if (soErros) maisPorProcessar = true;
+          break;
+        }
         await processarUm(item.f, item.pasta, item.modulo);
       }
     }

@@ -68,14 +68,20 @@ export class ErroIA extends Error {
 
 // Envia um pedido e devolve o texto da resposta. Os anexos vão antes do texto,
 // como a Anthropic recomenda para documentos.
+// Esforço de raciocínio: 'low' para transcrever (extratos), 'medium' para ler
+// documentos. Menos esforço = resposta mais rápida e mais barata.
+export type Esforco = 'low' | 'medium' | 'high';
+
 export async function perguntarIA({
   prompt,
   anexos = [],
   maxTokens = 32000,
+  esforco = 'medium',
 }: {
   prompt: string;
   anexos?: Anexo[];
   maxTokens?: number;
+  esforco?: Esforco;
 }): Promise<string> {
   if (!iaConfigurada()) throw new ErroIA('Serviço de IA não configurado (ANTHROPIC_API_KEY em falta)');
 
@@ -88,6 +94,7 @@ export async function perguntarIA({
       .beta.messages.stream({
         model: MODELO,
         max_tokens: maxTokens,
+        output_config: { effort: esforco },
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         messages: [{ role: 'user', content: [...blocos, { type: 'text', text: prompt }] }],

@@ -169,6 +169,38 @@ export default function DigitalizacoesPage() {
     carregar(tab);
   }, [tab, carregar]);
 
+  // Volta a ler, de seguida, todas as digitalizações com erro (cada uma é tentada uma vez).
+  const relerErros = async () => {
+    setSyncing(true);
+    toast.info('A ler outra vez as digitalizações com erro... pode demorar alguns minutos.');
+    const desde = new Date().toISOString();
+    const totais = { novos: 0, erros: 0, processados: 0 };
+    try {
+      let continuar = true;
+      let voltas = 0;
+      while (continuar && voltas < 100) {
+        voltas++;
+        const res = await fetch(`/api/digitalizacoes/sync?erros=1&desde=${encodeURIComponent(desde)}`, { method: 'POST' });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) {
+          toast.error(data?.error || 'Falha ao voltar a ler os erros.');
+          break;
+        }
+        totais.novos += data.novos || 0;
+        totais.erros += data.erros || 0;
+        totais.processados += data.processados || 0;
+        continuar = !!data.maisPorProcessar && (data.processados || 0) > 0;
+        if (continuar) toast.info(`A ler... ${totais.processados} lida(s) até agora.`);
+      }
+      toast.success(`Concluído: ${totais.novos} lida(s) com sucesso, ${totais.erros} ainda com erro.`);
+      await carregar(tab);
+    } catch {
+      toast.error('Falha ao voltar a ler os erros.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const verificarAgora = async () => {
     setSyncing(true);
     toast.info('A verificar o OneDrive... pode demorar alguns instantes.');
@@ -412,6 +444,16 @@ export default function DigitalizacoesPage() {
               {renaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSignature className="h-4 w-4" />}
               {renaming ? 'A renomear...' : 'Renomear existentes'}
             </button>
+            {tab === 'erro' && (resumo?.erro ?? 0) > 0 && (
+              <button
+                onClick={relerErros}
+                disabled={syncing || renaming}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-muted disabled:opacity-60"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Voltar a ler os erros
+              </button>
+            )}
             <button
               onClick={verificarAgora}
               disabled={syncing || renaming}

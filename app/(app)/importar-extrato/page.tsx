@@ -201,7 +201,14 @@ export default function ImportarExtratoPage() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/movimentos/parse-file', { method: 'POST', body: fd });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        toast.error(res.status === 504 || res.status === 502 || res.status === 503
+          ? 'A leitura do extrato demorou demasiado e foi interrompida pelo servidor. Tente um extrato mais curto (menos meses) ou exporte-o em Excel/CSV.'
+          : `Erro ao processar o ficheiro (resposta ${res.status} do servidor).`);
+        setLoading(false);
+        return;
+      }
       if (!res.ok || !data?.success) {
         toast.error(data?.error || 'Erro ao processar ficheiro');
         setLoading(false);
