@@ -13,6 +13,10 @@ const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'o
 
 const arred = (n: number) => Math.round(n * 100) / 100;
 const soma = (l: { valor: number | null }[]) => arred(l.reduce((s, f) => s + (f.valor ?? 0), 0));
+// O que falta de uma fatura (valor menos o já liquidado por recibos/notas de crédito).
+const emFalta = (f: { valor: number | null; valorReconciliado: number | null }) =>
+  Math.max(0, (f.valor ?? 0) - (f.valorReconciliado ?? 0));
+const somaEmFalta = (l: { valor: number | null; valorReconciliado: number | null }[]) => arred(l.reduce((s, f) => s + emFalta(f), 0));
 
 export async function painelEntidades(lado: Lado) {
   const clientes = lado === 'clientes';
@@ -77,6 +81,11 @@ export async function painelEntidades(lado: Lado) {
     const m = f.dataEmissao.getMonth();
     if (porMes[m]) porMes[m].valor += f.valor ?? 0;
   }
+  for (const n of notas) {
+    if (!n.dataEmissao || n.dataEmissao.getFullYear() !== hoje.getFullYear()) continue;
+    const m = n.dataEmissao.getMonth();
+    if (porMes[m]) porMes[m].valor += n.tipo === 'nota_debito' ? (n.valor ?? 0) : -(n.valor ?? 0);
+  }
   porMes.forEach((m) => (m.valor = arred(m.valor)));
 
   // Principais entidades pelo valor faturado no ano
@@ -91,7 +100,7 @@ export async function painelEntidades(lado: Lado) {
   }
   for (const f of porLiquidar) {
     const e = mapa.get(idEntidade(f) ?? nomeEntidade(f).toLowerCase());
-    if (e) e.pendente += f.valor ?? 0;
+    if (e) e.pendente += emFalta(f);
   }
   const principais = [...mapa.values()]
     .map((e) => ({ ...e, valor: arred(e.valor), pendente: arred(e.pendente) }))
@@ -104,6 +113,7 @@ export async function painelEntidades(lado: Lado) {
     numero: f.numero || f.descricao || 'S/N',
     entidade: nomeEntidade(f),
     valor: f.valor ?? 0,
+    emFalta: arred(emFalta(f)),
     dataEmissao: f.dataEmissao?.toISOString() ?? null,
     dataVencimento: f.dataVencimento?.toISOString() ?? null,
     vencida: (() => { const d = dataRef(f); return !!d && d < hoje; })(),
@@ -125,17 +135,21 @@ export async function painelEntidades(lado: Lado) {
   }
 
   const faturasMes = faturas.filter((f) => f.dataEmissao && f.dataEmissao >= inicioMes);
+  // Notas de crédito descontam ao faturado; notas de débito somam.
+  const efeitoNotas = (l: typeof notas) => arred(l.reduce((s, n) => s + (n.tipo === 'nota_debito' ? (n.valor ?? 0) : -(n.valor ?? 0)), 0));
+  const notasMes = notas.filter((n) => n.dataEmissao && n.dataEmissao >= inicioMes);
 
   return {
     lado,
     entidades,
     faturas: {
-      ano: soma(faturas), quantidadeAno: faturas.length,
-      mes: soma(faturasMes), quantidadeMes: faturasMes.length,
+      ano: arred(soma(faturas) + efeitoNotas(notas)), quantidadeAno: faturas.length,
+      mes: arred(soma(faturasMes) + efeitoNotas(notasMes)), quantidadeMes: faturasMes.length,
+      bruto: soma(faturas),
     },
     pendentes: {
-      total: soma(porLiquidar), quantidade: porLiquidar.length,
-      vencidas: vencidas.length, valorVencido: soma(vencidas),
+      total: somaEmFalta(porLiquidar), quantidade: porLiquidar.length,
+      vencidas: vencidas.length, valorVencido: somaEmFalta(vencidas),
       itens: pendentesOrdenadas.slice(0, 10).map(doc),
     },
     recibos: { total: soma(recibos), quantidade: recibos.length },

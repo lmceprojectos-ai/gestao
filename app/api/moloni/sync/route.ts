@@ -12,6 +12,7 @@ import {
   DOC_TYPES,
 } from '@/lib/moloni';
 import { syncDocumentosFornecedor, type GrupoFornecedor } from '@/lib/moloni-fornecedores';
+import { conciliarDocumentosMoloni } from '@/lib/moloni-conciliar';
 
 function moloniStatusLabel(status: number): string {
   switch (status) {
@@ -289,10 +290,17 @@ export async function POST(req: NextRequest) {
 
     if (type === 'faturas' || type === 'all') {
       results.faturas = await syncDocuments(companyId, grupo);
+      // Recibos e notas de crédito ficam logo ligados às faturas que liquidam.
+      if (grupo === 'recibos' || grupo === 'notas') {
+        results.conciliacao = await conciliarDocumentosMoloni(companyId, 'cliente', grupo);
+      }
     }
 
     if (type === 'documentosFornecedor') {
       results.documentosFornecedor = await syncDocumentosFornecedor(companyId, grupo as GrupoFornecedor | undefined);
+      if (grupo === 'recibos' || grupo === 'notas') {
+        results.conciliacao = await conciliarDocumentosMoloni(companyId, 'fornecedor', grupo);
+      }
     }
 
     return NextResponse.json({ success: true, results });

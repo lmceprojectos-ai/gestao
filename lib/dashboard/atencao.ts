@@ -73,7 +73,7 @@ export async function calcularAtencao() {
       tipo: 'fatura',
       descricao: f.numero || f.descricao || 'Fatura',
       entidade: f.tipo === 'emitida' ? f.cliente?.nome ?? f.entidadeNome : f.fornecedor?.nome ?? f.entidadeNome,
-      valor: f.valor ?? 0,
+      valor: Math.round(Math.max(0, (f.valor ?? 0) - (f.valorReconciliado ?? 0)) * 100) / 100,
       data: iso(data),
       vencido: vencido(data),
       href: f.tipo === 'emitida' ? '/faturas?tipo=emitida&origem=cliente' : '/faturas?tipo=recebida&origem=fornecedor',
