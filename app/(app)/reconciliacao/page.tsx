@@ -14,6 +14,8 @@ export default function ReconciliacaoPage() {
   const [faturasPendentes, setFaturasPendentes] = useState<any[]>([]);
   const [faturasClientes, setFaturasClientes] = useState<any[]>([]);
   const [contas, setContas] = useState<any[]>([]);
+  const [despesasPend, setDespesasPend] = useState<any[]>([]);
+  const [vencimentosPend, setVencimentosPend] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddMov, setShowAddMov] = useState(false);
   const [selectedMov, setSelectedMov] = useState<any>(null);
@@ -37,14 +39,17 @@ export default function ReconciliacaoPage() {
   const load = async () => {
     try {
       const url = selectedContaFilter ? `/api/movimentos?contaId=${selectedContaFilter}` : '/api/movimentos';
-      const [m, r, p, c, fp, fc] = await Promise.all([
+      const [m, r, p, c, fp, fc, outros] = await Promise.all([
         fetch(url).then((x) => x.json()),
         fetch('/api/recebimentos').then((x) => x.json()),
         fetch('/api/pagamentos').then((x) => x.json()),
         fetch('/api/contas').then((x) => x.json()),
         fetch('/api/faturas/pendentes').then((x) => x.json()),
         fetch('/api/faturas/pendentes?tipo=emitida').then((x) => x.json()),
+        fetch('/api/reconciliacao/outros').then((x) => x.json()).catch(() => ({})),
       ]);
+      setDespesasPend(Array.isArray(outros?.despesas) ? outros.despesas : []);
+      setVencimentosPend(Array.isArray(outros?.vencimentos) ? outros.vencimentos : []);
       setMovimentos(m ?? []); setRecebimentos((r ?? []).filter((x: any) => !x?.reconciliado)); setPagamentos((p ?? []).filter((x: any) => !x?.reconciliado)); setFaturasPendentes(Array.isArray(fp) ? fp : []); setFaturasClientes(Array.isArray(fc) ? fc : []); setContas(c ?? []);
     } catch (e: any) { console.error(e); } finally { setLoading(false); }
   };
@@ -69,6 +74,14 @@ export default function ReconciliacaoPage() {
   };
 
   const [desfazerBusy, setDesfazerBusy] = useState<string | null>(null);
+  const handleReconciliarOutro = async (movimentoId: string, alvo: { despesaId?: string; vencimentoId?: string }) => {
+    try {
+      const res = await fetch('/api/reconciliacao/outros', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ movimentoId, ...alvo }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d?.error || 'Erro na reconciliação'); return; }
+      toast.success(alvo.despesaId ? 'Movimento reconciliado com a despesa!' : 'Movimento reconciliado com o vencimento!'); setSelectedMov(null); load();
+    } catch { toast.error('Erro na reconciliação'); }
+  };
+
   const handleDesfazer = async (movimentoId: string) => {
     if (!confirm('Anular esta reconciliação?\n\nO movimento volta a ficar por reconciliar. Se a reconciliação tiver sido feita por fatura, o pagamento/recebimento criado automaticamente será apagado e o saldo da conta reposto.')) return;
     setDesfazerBusy(movimentoId);
@@ -184,7 +197,10 @@ export default function ReconciliacaoPage() {
   const sugRec = sugerir(recebimentos, (r) => r?.valor, (r) => r?.dataRecebimento, (r) => `${r?.descricao || ''} ${r?.valor ?? ''}`);
   const sugFatForn = sugerir(faturasPendentes, (f) => f?.saldoPendente ?? f?.valor, (f) => f?.dataEmissao, textoFatura);
   const sugPag = sugerir(pagamentos, (p) => p?.valor, (p) => p?.dataPagamento, (p) => `${p?.descricao || ''} ${p?.fatura?.numero || ''} ${p?.valor ?? ''}`);
-  const sugestoesMov = selectedMov?.tipo === 'credito' ? [sugFatCli, sugRec] : [sugFatForn, sugPag];
+  const sugDesp = sugerir(despesasPend, (d) => d?.valor, (d) => d?.data, (d) => `${d?.descricao || ''} ${d?.fornecedor?.nome || d?.entidadeNome || ''} ${d?.categoria || ''} ${d?.valor ?? ''}`);
+  const valorVencimento = (v: any) => v?.valorLiquido ?? v?.valorBruto;
+  const sugVenc = sugerir(vencimentosPend, valorVencimento, (v) => v?.dataPagamento || (v?.periodo ? `${v.periodo}-28` : null), (v) => `${v?.funcionario || ''} vencimento ${v?.periodo || ''} ${valorVencimento(v) ?? ''}`);
+  const sugestoesMov = selectedMov?.tipo === 'credito' ? [sugFatCli, sugRec] : [sugFatForn, sugPag, sugDesp, sugVenc];
   const totalIguais = sugestoesMov.reduce((n, x) => n + x.iguais, 0);
   const totalVisiveis = sugestoesMov.reduce((n, x) => n + x.itens.length, 0);
   const totalGeral = sugestoesMov.reduce((n, x) => n + x.total, 0);
@@ -358,6 +374,50 @@ export default function ReconciliacaoPage() {
                     )}
                   </div>
                   <div>
+                    <h3 className="text-sm font-semibold mb-2 text-purple-700 flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" />Vencimentos</h3>
+                    {sugVenc.itens.length === 0 ? vazioFiltrado('Sem vencimentos por reconciliar') : (
+                      <div className="space-y-2">
+                        {sugVenc.itens.map((v: any) => {
+                          const valorMatch = Math.abs((valorVencimento(v) || 0) - (selectedMov?.valor || 0)) < 0.01;
+                          return (
+                            <div key={v?.id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${valorMatch ? 'bg-purple-50 dark:bg-purple-900/20 ring-1 ring-purple-300' : 'bg-muted/30 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium">{v?.funcionario}</p>
+                                  {valorMatch && <span className="text-[10px] px-1.5 py-0.5 bg-purple-200 text-purple-800 dark:bg-purple-800 dark:text-purple-200 rounded font-medium">Valor coincide</span>}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Vencimento {v?.periodo || ''} • {formatCurrency(valorVencimento(v))} líquido • {v?.estado === 'pago' ? 'pago' : 'pendente'}</p>
+                              </div>
+                              <button onClick={() => handleReconciliarOutro(selectedMov?.id, { vencimentoId: v?.id })} className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 shrink-0"><Link2 className="h-3 w-3" />Conciliar</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2 text-orange-700 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Despesas</h3>
+                    {sugDesp.itens.length === 0 ? vazioFiltrado('Sem despesas por reconciliar') : (
+                      <div className="space-y-2">
+                        {sugDesp.itens.map((d: any) => {
+                          const valorMatch = Math.abs((d?.valor || 0) - (selectedMov?.valor || 0)) < 0.01;
+                          return (
+                            <div key={d?.id} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${valorMatch ? 'bg-orange-50 dark:bg-orange-900/20 ring-1 ring-orange-300' : 'bg-muted/30 hover:bg-orange-50 dark:hover:bg-orange-900/20'}`}>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium truncate max-w-[260px]">{d?.descricao}</p>
+                                  {valorMatch && <span className="text-[10px] px-1.5 py-0.5 bg-orange-200 text-orange-800 dark:bg-orange-800 dark:text-orange-200 rounded font-medium">Valor coincide</span>}
+                                </div>
+                                <p className="text-xs text-muted-foreground">{d?.fornecedor?.nome || d?.entidadeNome || d?.categoria || 'Despesa'} • {formatCurrency(d?.valor)} • {formatDate(d?.data)}{d?.estado === 'pago' ? ' • paga' : ''}</p>
+                              </div>
+                              <button onClick={() => handleReconciliarOutro(selectedMov?.id, { despesaId: d?.id })} className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-medium hover:bg-orange-700 shrink-0"><Link2 className="h-3 w-3" />Conciliar</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div>
                     <h3 className="text-sm font-semibold mb-2 text-red-700">Pagamentos pendentes</h3>
                     {sugPag.itens.length === 0 ? vazioFiltrado('Sem pagamentos pendentes') : (
                       <div className="space-y-2">
@@ -504,6 +564,19 @@ export default function ReconciliacaoPage() {
                           <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-2 py-1 rounded"><AlertTriangle className="h-3.5 w-3.5" />Valores diferentes (dif. {formatCurrency(Math.abs(Number(m?.valor) - Number(docValor)))}) — verifique</div>
                         )
                       )}
+                    </div>
+                  ) : m?.despesa || m?.vencimento ? (
+                    <div className="mt-2 pl-3 border-l-2 border-emerald-300 dark:border-emerald-800">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                        <ArrowRight className="h-3.5 w-3.5" />
+                        <span>Ligado a {m?.despesa ? 'despesa' : 'vencimento'}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm truncate flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {m?.despesa ? `${m.despesa.descricao}${m.despesa.entidadeNome ? ` • ${m.despesa.entidadeNome}` : ''}` : `${m.vencimento.funcionario}${m.vencimento.periodo ? ` • ${m.vencimento.periodo}` : ''}`}
+                        </p>
+                        {m?.despesa && <p className="font-mono font-bold text-sm shrink-0">{formatCurrency(m.despesa.valor)}</p>}
+                      </div>
                     </div>
                   ) : (
                     <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded"><AlertTriangle className="h-3.5 w-3.5" />Reconciliado mas sem documento associado — recomenda-se desfazer</div>

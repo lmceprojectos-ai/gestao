@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       // 1. Desligar o movimento
       await tx.movimentoBancario.update({
         where: { id: movimentoId },
-        data: { reconciliado: false, recebimentoId: null, pagamentoId: null },
+        data: { reconciliado: false, recebimentoId: null, pagamentoId: null, despesaId: null, vencimentoId: null },
       });
 
       // 2. Tratar o pagamento associado

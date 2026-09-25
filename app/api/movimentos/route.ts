@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
       orderBy: { dataMovimento: 'desc' },
       include: {
         contaBancaria: { select: { nome: true } },
+        despesa: { select: { id: true, descricao: true, valor: true, entidadeNome: true } },
+        vencimento: { select: { id: true, funcionario: true, periodo: true } },
         recebimento: {
           include: {
             cliente: { select: { nome: true } },

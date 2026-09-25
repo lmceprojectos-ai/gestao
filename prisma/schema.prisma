@@ -269,6 +269,7 @@ model Vencimento {
   comprovanteContentType    String? @db.Text
   comprovanteNomeOriginal   String? @db.Text
   isPublic                  Boolean   @default(false)
+  movimentosBancarios       MovimentoBancario[]
   criadoPor                 String? @db.Text
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
@@ -364,6 +365,7 @@ model Despesa {
   comprovativoContentType String? @db.Text
   comprovativoNomeOriginal String? @db.Text
   comprovativosExtra Json?
+  movimentosBancarios MovimentoBancario[]
   criadoPor       String? @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -471,6 +473,10 @@ model MovimentoBancario {
   recebimento     Recebimento? @relation(fields: [recebimentoId], references: [id])
   pagamentoId     String?
   pagamento       Pagamento?   @relation(fields: [pagamentoId], references: [id])
+  despesaId       String?
+  despesa         Despesa?     @relation(fields: [despesaId], references: [id])
+  vencimentoId    String?
+  vencimento      Vencimento?  @relation(fields: [vencimentoId], references: [id])
   criadoPor       String? @db.Text
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -479,6 +485,8 @@ model MovimentoBancario {
   @@index([dataMovimento])
   @@index([recebimentoId])
   @@index([pagamentoId])
+  @@index([despesaId])
+  @@index([vencimentoId])
 }
 
 model Configuracao {
