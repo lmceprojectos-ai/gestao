@@ -1,5 +1,6 @@
 'use client'
 
+import { useConta } from '@/components/parceiros/conta'
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FileCheck2, FileClock, Scale } from 'lucide-react'
@@ -28,9 +29,9 @@ function useCountUp(target: number, duration = 900) {
   return val
 }
 
-function perspective(v: number): string {
-  if (v > 0) return 'Reclamarte deve à Criaconsensos'
-  if (v < 0) return 'Criaconsensos deve à Reclamarte'
+function perspective(v: number, nome: string): string {
+  if (v > 0) return `${nome} deve à Criaconsensos`
+  if (v < 0) return `Criaconsensos deve a ${nome}`
   return 'Saldo liquidado'
 }
 
@@ -47,6 +48,7 @@ function Card({
   accent: string
   delay: number
 }) {
+  const { nome } = useConta()
   const animated = useCountUp(value)
   const v = Number(value ?? 0)
   const valueClass = v > 0 ? 'val-pos' : v < 0 ? 'val-neg' : 'text-muted-foreground'
@@ -66,7 +68,7 @@ function Card({
           <p className={`font-mono text-2xl font-bold tracking-tight mt-2 ${valueClass}`}>
             {formatSigned(animated)}
           </p>
-          <p className="text-xs text-muted-foreground mt-1.5">{perspective(v)}</p>
+          <p className="text-xs text-muted-foreground mt-1.5">{perspective(v, nome)}</p>
         </div>
         <div className="shrink-0 rounded-lg bg-secondary p-2 text-primary">{icon}</div>
       </div>

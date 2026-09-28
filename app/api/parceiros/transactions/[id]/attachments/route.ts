@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { utilizadorParceiros, podeAlterar } from '@/lib/parceiros/acesso';
+import { utilizadorParceiros, podeAlterar, acessoConta } from '@/lib/parceiros/acesso';
 
 // Guarda um documento (fatura, recibo…) já enviado para o armazenamento.
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -10,8 +10,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!user) return NextResponse.json({ message: 'Sem acesso aos Parceiros.' }, { status: 401 });
   try {
     const tx = await prisma.parceiroTransacao.findUnique({ where: { id: params.id } });
-    if (!tx) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
-    if (!podeAlterar(user, tx.company)) return NextResponse.json({ message: 'Só pode anexar documentos aos registos da sua empresa.' }, { status: 403 });
+    if (!tx || !acessoConta(user, tx.parceiroId)) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
+    if (!podeAlterar(user, tx)) return NextResponse.json({ message: 'Só pode anexar documentos aos registos da sua empresa.' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     const fileName = String(body?.fileName ?? '').trim();
     const cloudStoragePath = String(body?.cloud_storage_path ?? '').trim();

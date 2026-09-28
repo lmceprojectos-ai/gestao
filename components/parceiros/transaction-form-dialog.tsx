@@ -1,4 +1,5 @@
 'use client'
+import { useConta } from '@/components/parceiros/conta'
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -32,14 +33,12 @@ const selectClass =
 function allowedTypes(company: string | null, isAdmin: boolean): TransactionType[] {
   if (isAdmin) return ['DEBIT', 'CREDIT', 'PAYMENT']
   if (company === 'CRIACONSENSOS') return ['DEBIT', 'PAYMENT']
-  if (company === 'RECLAMARTE') return ['CREDIT', 'PAYMENT']
+  if (company === 'PARCEIRO') return ['CREDIT', 'PAYMENT']
   return []
 }
 
-const TYPE_OPTION_LABELS: Record<TransactionType, string> = {
-  DEBIT: 'Débito — trabalho da Criaconsensos',
-  CREDIT: 'Crédito — trabalho da Reclamarte',
-  PAYMENT: 'Pagamento',
+function typeOptionLabels(nome: string): Record<TransactionType, string> {
+  return { DEBIT: 'Débito — trabalho da Criaconsensos', CREDIT: `Crédito — trabalho de ${nome}`, PAYMENT: 'Pagamento' }
 }
 
 function todayStr(): string {
@@ -47,6 +46,7 @@ function todayStr(): string {
 }
 
 export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editTx }: Props) {
+  const conta = useConta()
   const types = allowedTypes(user?.company ?? null, Boolean(user?.isAdmin))
   const [date, setDate] = useState(todayStr())
   const [description, setDescription] = useState('')
@@ -109,7 +109,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
         isBilled,
         notify,
       }
-      const url = editTx ? `/api/parceiros/transactions/${editTx.id}` : '/api/parceiros/transactions'
+      const url = editTx ? `/api/parceiros/transactions/${editTx.id}` : `/api/parceiros/transactions?conta=${conta.id}`
       const method = editTx ? 'PUT' : 'POST'
       const res = await fetch(url, {
         method,
@@ -195,7 +195,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
             >
               {types.map((t) => (
                 <option key={t} value={t}>
-                  {TYPE_OPTION_LABELS[t]}
+                  {typeOptionLabels(conta.nome)[t]}
                 </option>
               ))}
             </select>
@@ -210,8 +210,8 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
                 value={paymentDirection}
                 onChange={(e) => setPaymentDirection(e.target.value as any)}
               >
-                <option value="A_PAYS_B">Criaconsensos paga à Reclamarte</option>
-                <option value="B_PAYS_A">Reclamarte paga à Criaconsensos</option>
+                <option value="A_PAYS_B">Criaconsensos paga a {conta.nome}</option>
+                <option value="B_PAYS_A">{conta.nome} paga à Criaconsensos</option>
               </select>
             </div>
           ) : null}

@@ -1,13 +1,14 @@
 'use client'
+import { useConta } from '@/components/parceiros/conta'
 
 import { motion } from 'framer-motion'
 import { ArrowRight, HandCoins, ScrollText, Scale } from 'lucide-react'
 import type { Totals } from '@/lib/parceiros/calc'
 import { formatEUR } from '@/lib/parceiros/format'
 
-function who(v: number): { text: string; cls: string } {
-  if (v > 0) return { text: 'A Reclamarte deve à Criaconsensos', cls: 'val-pos' }
-  if (v < 0) return { text: 'A Criaconsensos deve à Reclamarte', cls: 'val-neg' }
+function who(v: number, nome: string): { text: string; cls: string } {
+  if (v > 0) return { text: `${nome} deve à Criaconsensos`, cls: 'val-pos' }
+  if (v < 0) return { text: `A Criaconsensos deve a ${nome}`, cls: 'val-neg' }
   return { text: 'Contas saldadas', cls: 'text-muted-foreground' }
 }
 
@@ -22,7 +23,8 @@ function SettleRow({
   hint: string
   value: number
 }) {
-  const w = who(value)
+  const { nome } = useConta()
+  const w = who(value, nome)
   return (
     <div className="flex items-center justify-between gap-4 rounded-lg bg-secondary/60 px-4 py-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -41,10 +43,11 @@ function SettleRow({
 }
 
 export function SettlementPanel({ totals }: { totals: Totals }) {
+  const { nome } = useConta()
   const billed = Number(totals?.billed ?? 0)
   const unbilled = Number(totals?.unbilled ?? 0)
   const total = Number(totals?.total ?? 0)
-  const w = who(total)
+  const w = who(total, nome)
 
   return (
     <motion.div

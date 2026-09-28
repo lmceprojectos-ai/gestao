@@ -1,4 +1,5 @@
 'use client'
+import { useConta } from '@/components/parceiros/conta'
 
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -87,6 +88,7 @@ function GroupSubtotal({ label, value }: { label: string; value: number }) {
 }
 
 export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
+  const conta = useConta()
   const [rows, setRows] = useState<EnrichedTransaction[]>(initialRows ?? [])
   const [totals, setTotals] = useState<Totals>(initialTotals ?? { billed: 0, unbilled: 0, total: 0 })
   const [billedFilters, setBilledFilters] = useState<Filters>(EMPTY_FILTERS)
@@ -104,7 +106,7 @@ export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
   const refresh = async () => {
     setRefreshing(true)
     try {
-      const res = await fetch('/api/parceiros/transactions', { cache: 'no-store' })
+      const res = await fetch(`/api/parceiros/transactions?conta=${conta.id}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('fail')
       const data = await res.json()
       setRows(data?.rows ?? [])
@@ -180,7 +182,7 @@ export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
         >
           <div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-              Conta corrente entre parceiros
+              Conta corrente com {conta.nome}
             </h1>
             <p className="text-muted-foreground mt-1">
               Trabalhos com e sem fatura acertados em separado — na perspetiva da Criaconsensos.
@@ -207,7 +209,7 @@ export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
               label="Empresa B"
               value={
                 <span className="inline-flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 text-[hsl(142_55%_35%)]" /> Reclamarte
+                  <Building2 className="h-3.5 w-3.5 text-[hsl(142_55%_35%)]" /> {conta.nome}
                 </span>
               }
             />

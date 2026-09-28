@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, DatabaseBackup } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useConta } from '@/components/parceiros/conta';
 
-// Aparece só ao administrador quando ainda não há registos: traz os 32 registos
-// da app CONTA_CORRENTE (Abacus).
+// Aparece só ao administrador na conta da Reclamarte sem registos: traz os 32
+// registos da app CONTA_CORRENTE (Abacus).
 export function ImportarInicial() {
   const [aImportar, setAImportar] = useState(false);
   const router = useRouter();
+  const conta = useConta();
   const importar = async () => {
     setAImportar(true);
     try {
-      const r = await fetch('/api/parceiros/importar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const r = await fetch(`/api/parceiros/importar?conta=${conta.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.message || 'Erro ao importar');
       toast.success(`${d.criados} registos importados`);

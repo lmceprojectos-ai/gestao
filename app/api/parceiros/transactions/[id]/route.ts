@@ -2,50 +2,37 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { utilizadorParceiros, podeAlterar } from '@/lib/parceiros/acesso';
-import { enrich, movementOf, TYPE_LABELS } from '@/lib/parceiros/calc';
+import { utilizadorParceiros, acessoConta, podeAlterar } from '@/lib/parceiros/acesso';
+import { lerRegisto } from '@/lib/parceiros/registo';
+import { enrich, movementOf, typeLabels } from '@/lib/parceiros/calc';
 import type { TransactionType, PaymentDirection } from '@/lib/parceiros/calc';
 import { getAllDTO } from '@/lib/parceiros/server-tx';
 import { notifyChange } from '@/lib/parceiros/notify';
 import { formatDatePT } from '@/lib/parceiros/format';
 
-function round2(n: number): number {
-  return Math.round((Number(n ?? 0) + Number.EPSILON) * 100) / 100;
+async function registoComConta(id: string) {
+  return prisma.parceiroTransacao.findUnique({ where: { id }, include: { parceiro: true, attachments: true } });
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const user = await utilizadorParceiros();
   if (!user) return NextResponse.json({ message: 'Sem acesso aos Parceiros.' }, { status: 401 });
   try {
-    const existing = await prisma.parceiroTransacao.findUnique({ where: { id: params.id } });
-    if (!existing) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
-    if (!podeAlterar(user, existing.company)) return NextResponse.json({ message: 'Só pode editar os registos criados pela sua empresa.' }, { status: 403 });
-  const body = await request.json().catch(() => ({}));
-  const description = String(body?.description ?? '').trim();
-  const reference = body?.reference ? String(body.reference).trim() : null;
-  const dateStr = String(body?.date ?? '').slice(0, 10);
-  const type = String(body?.type ?? '') as TransactionType;
-  const amount = Math.max(0, round2(Number(body?.amount ?? 0)));
-  const isBilled = Boolean(body?.isBilled);
-  const shouldNotify = body?.notify !== false;
-  const paymentDirection: PaymentDirection | null = type === 'PAYMENT' ? ((body?.paymentDirection as PaymentDirection) ?? 'A_PAYS_B') : null;
-  if (!description || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || !['DEBIT', 'CREDIT', 'PAYMENT'].includes(type)) {
-    return NextResponse.json({ message: 'Dados inválidos.' }, { status: 400 });
-  }
-  if (!user.isAdmin) {
-    if (type === 'DEBIT' && user.company !== 'CRIACONSENSOS') return NextResponse.json({ message: 'Apenas a Criaconsensos pode registar débitos.' }, { status: 403 });
-    if (type === 'CREDIT' && user.company !== 'RECLAMARTE') return NextResponse.json({ message: 'Apenas a Reclamarte pode registar créditos.' }, { status: 403 });
-  }
-
+    const existing = await registoComConta(params.id);
+    if (!existing?.parceiro || !acessoConta(user, existing.parceiroId)) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
+    if (!podeAlterar(user, existing)) return NextResponse.json({ message: 'Só pode editar os registos criados pela sua empresa.' }, { status: 403 });
+    const lido = lerRegisto(await request.json().catch(() => ({})), user);
+    if ('erro' in lido) return NextResponse.json({ message: lido.erro }, { status: lido.status });
+    const { date, description, reference, amount, type, paymentDirection, isBilled, notify } = lido;
     await prisma.parceiroTransacao.update({
       where: { id: params.id },
-      data: { date: new Date(`${dateStr}T00:00:00.000Z`), description, reference, amount, type, paymentDirection, isBilled },
+      data: { date: new Date(`${date}T00:00:00.000Z`), description, reference, amount, type, paymentDirection, isBilled },
     });
-    if (shouldNotify) {
-      const { totals } = enrich(await getAllDTO());
+    if (notify) {
+      const { totals } = enrich(await getAllDTO(existing.parceiro.id));
       await notifyChange({
-        action: 'editado', actor: user.name,
-        summary: { date: formatDatePT(dateStr), description, reference, typeLabel: TYPE_LABELS[type], amount: movementOf({ type, amount, paymentDirection }), isBilled },
+        parceiro: existing.parceiro, action: 'editado', actor: user.name,
+        summary: { date: formatDatePT(date), description, reference, typeLabel: typeLabels(existing.parceiro.nome)[type], amount: movementOf({ type, amount, paymentDirection }), isBilled },
         totals,
       });
     }
@@ -60,9 +47,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   const user = await utilizadorParceiros();
   if (!user) return NextResponse.json({ message: 'Sem acesso aos Parceiros.' }, { status: 401 });
   try {
-    const existing = await prisma.parceiroTransacao.findUnique({ where: { id: params.id }, include: { attachments: true } });
-    if (!existing) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
-    if (!podeAlterar(user, existing.company)) return NextResponse.json({ message: 'Só pode eliminar os registos criados pela sua empresa.' }, { status: 403 });
+    const existing = await registoComConta(params.id);
+    if (!existing?.parceiro || !acessoConta(user, existing.parceiroId)) return NextResponse.json({ message: 'Registo não encontrado.' }, { status: 404 });
+    if (!podeAlterar(user, existing)) return NextResponse.json({ message: 'Só pode eliminar os registos criados pela sua empresa.' }, { status: 403 });
     const type = existing.type as TransactionType;
     const amount = Number(existing.amount ?? 0);
     const paymentDirection = (existing.paymentDirection ?? null) as PaymentDirection | null;
@@ -70,10 +57,10 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     const { deleteFile } = await import('@/lib/s3');
     for (const a of existing.attachments) { try { await deleteFile(a.cloudStoragePath); } catch {} }
     if (new URL(request.url).searchParams.get('notify') !== 'false') {
-      const { totals } = enrich(await getAllDTO());
+      const { totals } = enrich(await getAllDTO(existing.parceiro.id));
       await notifyChange({
-        action: 'eliminado', actor: user.name,
-        summary: { date: formatDatePT(existing.date.toISOString().slice(0, 10)), description: existing.description, reference: existing.reference ?? null, typeLabel: TYPE_LABELS[type], amount: movementOf({ type, amount, paymentDirection }), isBilled: existing.isBilled },
+        parceiro: existing.parceiro, action: 'eliminado', actor: user.name,
+        summary: { date: formatDatePT(existing.date.toISOString().slice(0, 10)), description: existing.description, reference: existing.reference ?? null, typeLabel: typeLabels(existing.parceiro.nome)[type], amount: movementOf({ type, amount, paymentDirection }), isBilled: existing.isBilled },
         totals,
       });
     }

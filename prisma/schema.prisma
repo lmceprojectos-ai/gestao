@@ -41,8 +41,11 @@ model User {
   absences          Absence[]
   vacations         VacationRequest[]
   pontoResetTokens  PontoPasswordResetToken[]
-  // Parceiros (conta corrente): empresa a que o utilizador pertence (CRIACONSENSOS | RECLAMARTE).
+  // Parceiros (conta corrente): parceiro a que o utilizador pertence (só vê a conta desse parceiro).
+  // parceiroEmpresa é o campo antigo (antes de haver vários parceiros), usado só na migração.
   parceiroEmpresa   String?   @db.VarChar(20)
+  parceiroId        String?
+  parceiro          Parceiro? @relation(fields: [parceiroId], references: [id], onDelete: SetNull)
   parceiroTransacoes ParceiroTransacao[]
   payslips          Payslip[]
   salaryProfile     SalaryProfile?
@@ -1061,12 +1064,26 @@ model Backup {
   createdAt DateTime @default(now())
 }
 
-// ---- Parceiros: conta corrente Criaconsensos ↔ Reclamarte (trazida da app CONTA_CORRENTE da Abacus) ----
-// type: DEBIT (trabalho da Criaconsensos, +) | CREDIT (trabalho da Reclamarte, −) | PAYMENT
-// paymentDirection: A_PAYS_B (Criaconsensos paga) | B_PAYS_A (Reclamarte paga)
-// company: empresa dona do registo (só ela o pode alterar, além dos administradores).
+// ---- Parceiros: contas correntes Criaconsensos (empresa A) ↔ cada parceiro (empresa B) ----
+// (trazida da app CONTA_CORRENTE da Abacus; cada parceiro tem a sua conta corrente)
+model Parceiro {
+  id           String              @id @default(cuid())
+  nome         String              @db.VarChar(191)
+  emailAvisos  String?             @db.VarChar(191)
+  ativo        Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  transacoes   ParceiroTransacao[]
+  utilizadores User[]
+}
+
+// type: DEBIT (trabalho da Criaconsensos, +) | CREDIT (trabalho do parceiro, −) | PAYMENT
+// paymentDirection: A_PAYS_B (Criaconsensos paga) | B_PAYS_A (o parceiro paga)
+// company: dono do registo — CRIACONSENSOS | PARCEIRO (só ele o altera, além dos administradores).
 model ParceiroTransacao {
   id               String   @id @default(cuid())
+  parceiroId       String?
+  parceiro         Parceiro? @relation(fields: [parceiroId], references: [id], onDelete: Cascade)
   date             DateTime
   description      String   @db.Text
   reference        String?  @db.Text
@@ -1086,6 +1103,7 @@ model ParceiroTransacao {
   allocationsAsWork    ParceiroAlocacao[] @relation("ParceiroTrabalhos")
 
   @@index([orderIndex])
+  @@index([parceiroId])
 }
 
 model ParceiroAnexo {

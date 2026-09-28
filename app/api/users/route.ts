@@ -9,7 +9,6 @@ import { effectivePontoRole } from '@/lib/ponto/roles';
 import { sanitizePermissions } from '@/lib/permissions';
 
 const ROLES = ['admin', 'editor', 'insercao', 'leitura', 'parceiro'];
-const EMPRESAS_PARCEIRAS = ['CRIACONSENSOS', 'RECLAMARTE'];
 
 export async function GET() {
   try {
@@ -27,7 +26,7 @@ export async function GET() {
         createdAt: true,
         isPontoUser: true,
         pontoRole: true,
-        parceiroEmpresa: true,
+        parceiroId: true,
         sendToAccounting: true,
         partTime: true,
         permissions: true,
@@ -65,6 +64,9 @@ export async function POST(req: NextRequest) {
     if (gRole === 'editor' && finalRole === 'admin') {
       return NextResponse.json({ error: 'Sem permissão para criar contas de administrador. Contacte um administrador.' }, { status: 403 });
     }
+    if (finalRole === 'parceiro' && !(body as any)?.parceiroId) {
+      return NextResponse.json({ error: 'Escolha o parceiro a que esta conta pertence' }, { status: 400 });
+    }
     const existing = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
     if (existing) return NextResponse.json({ error: 'Este email já está registado' }, { status: 409 });
 
@@ -77,8 +79,8 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name, email: String(email).toLowerCase().trim(), password: hashed, role: finalRole, permissions: permsToSave,
-        // Parceiros: a conta "parceiro" tem de ter empresa (por defeito a Reclamarte).
-        parceiroEmpresa: EMPRESAS_PARCEIRAS.includes((body as any)?.parceiroEmpresa) ? (body as any).parceiroEmpresa : finalRole === 'parceiro' ? 'RECLAMARTE' : null,
+        // Parceiros: parceiro a que o utilizador pertence (só vê a conta corrente desse parceiro).
+        parceiroId: typeof (body as any)?.parceiroId === 'string' && (body as any).parceiroId ? (body as any).parceiroId : null,
       },
       select: { id: true, name: true, email: true, role: true, lastLogin: true, createdAt: true },
     });

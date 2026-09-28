@@ -1,4 +1,5 @@
-export type Company = 'CRIACONSENSOS' | 'RECLAMARTE'
+// Empresa A é sempre a Criaconsensos; a empresa B é o parceiro da conta.
+export type Company = 'CRIACONSENSOS' | 'PARCEIRO'
 export type TransactionType = 'DEBIT' | 'CREDIT' | 'PAYMENT'
 export type PaymentDirection = 'A_PAYS_B' | 'B_PAYS_A'
 
@@ -113,13 +114,14 @@ export function enrich(transactions: TransactionDTO[]): {
   return { rows, totals: { billed, unbilled, total: round2(billed + unbilled) } }
 }
 
-export const TYPE_LABELS: Record<TransactionType, string> = {
-  DEBIT: 'Débito (Criaconsensos executou)',
-  CREDIT: 'Crédito (Reclamarte executou)',
-  PAYMENT: 'Pagamento',
+export function typeLabels(nomeParceiro: string): Record<TransactionType, string> {
+  return {
+    DEBIT: 'Débito (Criaconsensos executou)',
+    CREDIT: `Crédito (${nomeParceiro} executou)`,
+    PAYMENT: 'Pagamento',
+  }
 }
 
-export const COMPANY_LABELS: Record<Company, string> = {
-  CRIACONSENSOS: 'Criaconsensos',
-  RECLAMARTE: 'Reclamarte',
+export function companyLabel(company: Company | string | null, nomeParceiro: string): string {
+  return company === 'PARCEIRO' ? nomeParceiro : 'Criaconsensos'
 }

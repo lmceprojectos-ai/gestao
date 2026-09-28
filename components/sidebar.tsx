@@ -203,7 +203,7 @@ function SidebarInner() {
   const isAdmin = role === 'admin';
   const isEditor = role === 'editor';
   // Parceiros (conta corrente com a Reclamarte): administradores e quem tem empresa parceira.
-  const verParceiros = isAdmin || !!(session?.user as any)?.parceiroEmpresa;
+  const verParceiros = isAdmin || !!(session?.user as any)?.parceiroId;
   const isInsercao = role === 'insercao';
   // Permissões por perfil (áreas visíveis). Vêm da sessão; em falta, usa os
   // valores por defeito para o perfil. O administrador vê sempre tudo.

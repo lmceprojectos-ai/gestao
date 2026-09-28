@@ -6,8 +6,10 @@ export function toDateStr(d: Date): string {
   return new Date(d).toISOString().slice(0, 10);
 }
 
-export async function getAllDTO(): Promise<TransactionDTO[]> {
+// Registos de uma conta (parceiro).
+export async function getAllDTO(parceiroId: string): Promise<TransactionDTO[]> {
   const txs = await prisma.parceiroTransacao.findMany({
+    where: { parceiroId },
     orderBy: { orderIndex: 'asc' },
     include: {
       createdBy: { select: { name: true } },

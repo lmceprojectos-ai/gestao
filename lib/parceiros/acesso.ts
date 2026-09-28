@@ -1,44 +1,57 @@
-// Quem entra nos Parceiros (conta corrente Criaconsensos ↔ Reclamarte):
-//  - administradores da Gestão: entram como Criaconsensos, com permissão total;
-//  - utilizadores com "empresa parceira" definida (ex.: a conta da Reclamarte).
-// Cada empresa só altera os seus próprios registos; o administrador altera tudo.
+// Quem entra nos Parceiros (contas correntes: empresa A = Criaconsensos, B = cada parceiro):
+//  - administradores da Gestão: são a Criaconsensos, veem todas as contas e alteram tudo;
+//  - utilizadores ligados a um parceiro: só veem a conta desse parceiro e só alteram
+//    os registos do parceiro.
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import type { Company } from '@/lib/parceiros/calc';
 import { hasGestaoAccess } from '@/lib/ponto/roles';
 
-export const EMPRESAS: Company[] = ['CRIACONSENSOS', 'RECLAMARTE'];
-
 export type UtilizadorParceiros = {
   id: string;
   name: string;
   email: string;
-  company: Company | null;
+  company: Company;
   isAdmin: boolean;
   temGestao: boolean;
+  parceiroId: string | null;
 };
 
 export async function utilizadorParceiros(): Promise<UtilizadorParceiros | null> {
   const session = await getServerSession(authOptions);
   const id = (session?.user as any)?.id as string | undefined;
   if (!id) return null;
-  const u = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, role: true, parceiroEmpresa: true } });
+  const u = await prisma.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, role: true, parceiroId: true } });
   if (!u) return null;
   const isAdmin = u.role === 'admin';
-  const empresa = EMPRESAS.includes(u.parceiroEmpresa as Company) ? (u.parceiroEmpresa as Company) : null;
-  if (!isAdmin && !empresa) return null;
+  if (!isAdmin && !u.parceiroId) return null;
   return {
     id: u.id,
     name: u.name ?? u.email,
     email: u.email,
-    company: empresa ?? 'CRIACONSENSOS',
+    company: isAdmin ? 'CRIACONSENSOS' : 'PARCEIRO',
     isAdmin,
     temGestao: hasGestaoAccess(u.role),
+    parceiroId: isAdmin ? null : u.parceiroId,
   };
 }
 
-// Pode alterar um registo: administrador ou a empresa dona do registo.
-export function podeAlterar(u: UtilizadorParceiros, empresaDoRegisto: string) {
-  return u.isAdmin || u.company === empresaDoRegisto;
+// Pode ver a conta deste parceiro?
+export function acessoConta(u: UtilizadorParceiros, parceiroId: string | null | undefined) {
+  if (!parceiroId) return false;
+  return u.isAdmin || u.parceiroId === parceiroId;
+}
+
+// Pode alterar este registo: administrador, ou o parceiro dono do registo na sua conta.
+export function podeAlterar(u: UtilizadorParceiros, reg: { company: string; parceiroId: string | null }) {
+  if (u.isAdmin) return true;
+  return reg.company === 'PARCEIRO' && !!reg.parceiroId && reg.parceiroId === u.parceiroId;
+}
+
+// Parceiro da conta pedida (?conta=), já com a verificação de acesso.
+export async function contaDoPedido(u: UtilizadorParceiros, contaId: string | null) {
+  const id = contaId || u.parceiroId;
+  if (!id || !acessoConta(u, id)) return null;
+  return prisma.parceiro.findUnique({ where: { id } });
 }
