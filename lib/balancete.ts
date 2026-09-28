@@ -34,6 +34,10 @@ export async function anosBalancete() {
   return anos;
 }
 
+// Contas que não são bancos (sócia, gerente, caixa): não entram no saldo bancário.
+export const CONTAS_NAO_BANCARIAS = ['sócia', 'socia', 'gerente', 'cash', 'caixa', 'sem conta'];
+export const eContaBancaria = (nome: string) => !CONTAS_NAO_BANCARIAS.includes(nome.trim().toLowerCase());
+
 export function trimestreDe(data: Date) {
   return `Q${Math.floor(data.getUTCMonth() / 3) + 1}`;
 }
@@ -245,7 +249,8 @@ export async function dashboardBalancete(ano?: number | null) {
     totalDespesas,
     resultado: arred(totalReceitas - totalDespesas),
     totalMovimentos: movs.length,
-    saldoTotal: arred(contas.reduce((s, c) => s + c.saldo, 0)),
+    // Saldo bancário: só as contas bancárias (CGD, Montepio…), cada uma com o seu sinal.
+    saldoTotal: arred(contas.filter((c) => eContaBancaria(c.nome)).reduce((s, c) => s + c.saldo, 0)),
     contas,
     trimestres,
     categorias: [...porCategoria].map(([nome, valor]) => ({ nome, valor: arred(valor) })).sort((a, b) => b.valor - a.valor),

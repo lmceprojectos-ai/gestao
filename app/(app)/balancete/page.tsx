@@ -142,8 +142,8 @@ const estiloConta = (nome: string) => ESTILO_CONTA[nome.toLowerCase()] ?? { fund
 function SeparadorDashboard({ dash }: { dash: Dashboard | null }) {
   if (!dash) return <div className="h-64 bg-muted rounded-xl animate-pulse" />;
   // Contas bancárias: com movimentos ou saldo; as outras (sócia, gerente, caixa) em cartões pequenos.
-  const PEQUENAS = ['sócia', 'gerente', 'cash', 'caixa', 'sem conta'];
-  const bancarias = dash.contas.filter((c) => !PEQUENAS.includes(c.nome.toLowerCase()) && (c.movimentos > 0 || c.saldo !== 0));
+  const PEQUENAS = ['sócia', 'socia', 'gerente', 'cash', 'caixa', 'sem conta'];
+  const bancarias = dash.contas.filter((c) => !PEQUENAS.includes(c.nome.trim().toLowerCase()) && (c.movimentos > 0 || c.saldo !== 0));
   const ORDEM = ['sócia', 'gerente', 'cash', 'sem conta'];
   const pos = (n: string) => { const i = ORDEM.indexOf(n.toLowerCase()); return i < 0 ? 99 : i; };
   const outras = dash.contas.filter((c) => !bancarias.includes(c)).sort((a, b) => pos(a.nome) - pos(b.nome));
@@ -159,7 +159,8 @@ function SeparadorDashboard({ dash }: { dash: Dashboard | null }) {
       <div className="rounded-xl p-5 border-2 border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-900/50 shadow-sm flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-300 flex items-center gap-2"><Landmark className="h-4 w-4" />SALDO BANCÁRIO TOTAL</p>
-          <p className="text-4xl font-bold font-mono tabular-nums mt-1">{euro(dash.saldoTotal)}</p>
+          <p className={`text-4xl font-bold font-mono tabular-nums mt-1 ${dash.saldoTotal < 0 ? 'text-red-600' : ''}`}>{euro(dash.saldoTotal)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Soma das contas bancárias ({bancarias.map((c) => c.nome).join(' + ') || '—'}). Sócia, gerente e caixa não entram.</p>
         </div>
         <div className="p-4 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"><Landmark className="h-7 w-7" /></div>
       </div>
@@ -367,7 +368,7 @@ function SeparadorContas({ contas, saldoTotal }: { contas: Conta[] | null; saldo
   return (
     <div className="space-y-4">
       <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
-        <p className="text-sm text-muted-foreground">Saldo Total Calculado</p>
+        <p className="text-sm text-muted-foreground">Saldo bancário (contas bancárias)</p>
         <p className={`text-3xl font-bold font-mono tabular-nums ${corValor(saldoTotal)}`}>{formatCurrency(saldoTotal)}</p>
         <p className="text-xs text-muted-foreground mt-1">Saldo de abertura + movimentos registados depois da data de abertura, até ao fim do ano escolhido. Receitas e despesas do ano escolhido.</p>
       </div>
