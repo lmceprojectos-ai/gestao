@@ -134,7 +134,7 @@ export function areasForPath(pathname: string): AreaKey[] {
   if (starts("/clientes") || starts("/painel-clientes") || starts("/recebimentos")) return ["clientes"];
   if (starts("/fornecedores") || starts("/painel-fornecedores") || starts("/pagamentos") || starts("/efatura")) return ["fornecedores"];
   if (starts("/despesas") || starts("/impostos") || starts("/seguros") || starts("/vencimentos") || starts("/digitalizacoes") || starts("/ocr") || starts("/upload")) return ["documentos"];
-  if (starts("/contas") || starts("/caixa") || starts("/transferencias") || starts("/importar-extrato") || starts("/movimentos-bancarios") || starts("/movimentos") || starts("/reconciliacao")) return ["bancos"];
+  if (starts("/contas") || starts("/caixa") || starts("/transferencias") || starts("/importar-extrato") || starts("/movimentos-bancarios") || starts("/movimentos") || starts("/reconciliacao") || starts("/balancete")) return ["bancos"];
   // /api/ifthenpay/callback é público (chamado pela IfThenPay) e não passa por aqui.
   if (starts("/emprestimos") || starts("/relatorios") || starts("/moloni")) return ["gestao"];
   if (starts("/utilizadores") || starts("/users")) return ["utilizadores"];

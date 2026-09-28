@@ -995,3 +995,65 @@ model EFaturaDocumento {
   @@unique([emitenteNif, numero])
   @@index([mes])
 }
+
+// ---- Balancete (trazido de balancete2026.abacusai.app) ----
+// Contas do balancete: saldo de abertura numa data; o saldo atual é a abertura
+// mais os movimentos posteriores a essa data.
+model BalanceteConta {
+  id             String   @id @default(cuid())
+  nome           String   @db.VarChar(191)
+  saldoAbertura  Float    @default(0)
+  dataAbertura   DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([nome])
+}
+
+// Um movimento do balancete. valor > 0 entra, valor < 0 sai.
+// tipo: RECEITA | DESPESA | INTERNO (transferência entre contas).
+model BalanceteMovimento {
+  id           String   @id @default(cuid())
+  data         DateTime
+  valor        Float
+  descricao    String   @db.Text
+  metodo       String?  @db.VarChar(191)
+  conta        String   @db.VarChar(191)
+  categoria    String?  @db.VarChar(191)
+  subcategoria String?  @db.VarChar(191)
+  fiscal       String?  @db.VarChar(191)
+  tipo         String   @db.VarChar(20)
+  trimestre    String   @db.VarChar(4)
+  origem       String?  @db.VarChar(191)
+  destino      String?  @db.VarChar(191)
+  nota         String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([data])
+  @@index([conta])
+  @@index([tipo])
+  @@index([trimestre])
+  @@index([categoria])
+}
+
+// Listas do balancete: grupo = categoria | subcategoria | metodo
+model BalanceteLista {
+  id    String @id @default(cuid())
+  grupo String @db.VarChar(20)
+  nome  String @db.VarChar(191)
+
+  @@unique([grupo, nome])
+}
+
+// Cópias de segurança guardadas no servidor (ficheiro JSON em LOCAL_UPLOADS_DIR/backups).
+model Backup {
+  id        String   @id @default(cuid())
+  nome      String   @db.VarChar(191)
+  descricao String?  @db.Text
+  origem    String?  @db.VarChar(191)
+  ficheiro  String   @db.VarChar(512)
+  tamanho   Int      @default(0)
+  criadoPor String?  @db.Text
+  createdAt DateTime @default(now())
+}

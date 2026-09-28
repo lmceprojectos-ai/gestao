@@ -6,6 +6,8 @@ import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
+  Scale,
+  DatabaseBackup,
   Landmark,
   Users,
   Truck,
@@ -53,6 +55,8 @@ type NavItem = {
   label: string;
   // Item novo que deve aparecer no topo da secção mesmo num menu já personalizado.
   primeiro?: boolean;
+  // Desativado por agora: não aparece no menu (a página continua a existir).
+  oculto?: boolean;
   icon: any;
   tipo?: string;
   origem?: string;
@@ -68,21 +72,21 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   ] },
   { title: 'Clientes', items: [
-    { href: '/painel-clientes', label: 'Dashboard', icon: LayoutDashboard, area: 'clientes', primeiro: true },
+    { href: '/painel-clientes', label: 'Dashboard', icon: LayoutDashboard, area: 'clientes', primeiro: true, oculto: true },
     { href: '/clientes', label: 'Clientes', icon: Users, area: 'clientes' },
-    { href: '/faturas?tipo=emitida&origem=cliente', label: 'Faturas Clientes', icon: FileText, tipo: 'emitida', origem: 'cliente', sub: true, area: 'clientes' },
-    { href: '/faturas?tipo=recibo&origem=cliente', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'cliente', sub: true, area: 'clientes' },
-    { href: '/faturas?tipo=nota&origem=cliente', label: 'Notas de Crédito', icon: FileMinus, tipo: 'nota', origem: 'cliente', sub: true, area: 'clientes' },
-    { href: '/recebimentos', label: 'Recebimentos', icon: ArrowDownCircle, area: 'clientes' },
+    { href: '/faturas?tipo=emitida&origem=cliente', label: 'Faturas Clientes', icon: FileText, tipo: 'emitida', origem: 'cliente', sub: true, area: 'clientes', oculto: true },
+    { href: '/faturas?tipo=recibo&origem=cliente', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'cliente', sub: true, area: 'clientes', oculto: true },
+    { href: '/faturas?tipo=nota&origem=cliente', label: 'Notas de Crédito', icon: FileMinus, tipo: 'nota', origem: 'cliente', sub: true, area: 'clientes', oculto: true },
+    { href: '/recebimentos', label: 'Recebimentos', icon: ArrowDownCircle, area: 'clientes', oculto: true },
   ] },
   { title: 'Fornecedores', items: [
-    { href: '/painel-fornecedores', label: 'Dashboard', icon: LayoutDashboard, area: 'fornecedores', primeiro: true },
+    { href: '/painel-fornecedores', label: 'Dashboard', icon: LayoutDashboard, area: 'fornecedores', primeiro: true, oculto: true },
     { href: '/fornecedores', label: 'Fornecedores', icon: Truck, area: 'fornecedores' },
-    { href: '/faturas?tipo=recebida&origem=fornecedor', label: 'Faturas Fornecedores', icon: FileText, tipo: 'recebida', origem: 'fornecedor', sub: true, area: 'fornecedores' },
-    { href: '/faturas?tipo=recibo&origem=fornecedor', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'fornecedor', sub: true, area: 'fornecedores' },
-    { href: '/faturas?tipo=nota&origem=fornecedor', label: 'Notas de Crédito', icon: FileMinus, tipo: 'nota', origem: 'fornecedor', sub: true, area: 'fornecedores' },
-    { href: '/faturas?tipo=orcamento&origem=fornecedor', label: 'Orçamentos', icon: ClipboardList, tipo: 'orcamento', origem: 'fornecedor', sub: true, area: 'fornecedores' },
-    { href: '/pagamentos', label: 'Pagamentos', icon: ArrowUpCircle, area: 'fornecedores' },
+    { href: '/faturas?tipo=recebida&origem=fornecedor', label: 'Faturas Fornecedores', icon: FileText, tipo: 'recebida', origem: 'fornecedor', sub: true, area: 'fornecedores', oculto: true },
+    { href: '/faturas?tipo=recibo&origem=fornecedor', label: 'Recibos', icon: FileCheck, tipo: 'recibo', origem: 'fornecedor', sub: true, area: 'fornecedores', oculto: true },
+    { href: '/faturas?tipo=nota&origem=fornecedor', label: 'Notas de Crédito', icon: FileMinus, tipo: 'nota', origem: 'fornecedor', sub: true, area: 'fornecedores', oculto: true },
+    { href: '/faturas?tipo=orcamento&origem=fornecedor', label: 'Orçamentos', icon: ClipboardList, tipo: 'orcamento', origem: 'fornecedor', sub: true, area: 'fornecedores', oculto: true },
+    { href: '/pagamentos', label: 'Pagamentos', icon: ArrowUpCircle, area: 'fornecedores', oculto: true },
     { href: '/efatura', label: 'e-Fatura (AT)', icon: FileSearch, area: 'fornecedores' },
   ] },
   { title: 'Documentos', items: [
@@ -103,12 +107,14 @@ const navSections: { title: string | null; items: NavItem[] }[] = [
     { href: '/importar-extrato', label: 'Importar Extrato', icon: FileUp, area: 'bancos' },
     { href: '/movimentos-bancarios', label: 'Movimentos Bancários', icon: ListOrdered, area: 'bancos' },
     { href: '/reconciliacao', label: 'Reconciliação', icon: RefreshCcw, area: 'bancos' },
+    { href: '/balancete', label: 'Balancete', icon: Scale, area: 'bancos' },
   ] },
   { title: 'Gestão', items: [
     { href: '/emprestimos', label: 'Empréstimos Sócio', icon: Handshake, hideForInsercao: true, area: 'gestao' },
     { href: '/relatorios', label: 'Relatórios', icon: BarChart3, hideForInsercao: true, area: 'gestao' },
     { href: '/moloni', label: 'Moloni', icon: Plug, area: 'gestao' },
     { href: '/utilizadores', label: 'Utilizadores', icon: UserCog, adminEditorOnly: true, area: 'utilizadores' },
+    { href: '/backups', label: 'Backups', icon: DatabaseBackup, adminOnly: true },
     { href: '/configuracoes', label: 'Configurações', icon: Settings },
   ] },
 ];
@@ -250,7 +256,7 @@ function SidebarInner() {
   const sectionKey = (title: string | null) => title ?? '__main__';
 
   const itemVisivel = (it: NavItem) =>
-    (!it.adminOnly || isAdmin) && (!it.adminEditorOnly || isAdmin || isEditor) && !(it.hideForInsercao && isInsercao) && areaVisible(it.area);
+    !it.oculto && (!it.adminOnly || isAdmin) && (!it.adminEditorOnly || isAdmin || isEditor) && !(it.hideForInsercao && isInsercao) && areaVisible(it.area);
 
   // Secções como definidas no código (só com os itens que o perfil pode ver).
   const base = navSections.map((s) => ({ ...s, items: s.items.filter(itemVisivel) }));
