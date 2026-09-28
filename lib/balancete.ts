@@ -108,27 +108,89 @@ async function contasComSaldo(ano?: number | null) {
     prisma.balanceteConta.findMany({ orderBy: { nome: 'asc' } }),
     prisma.balanceteMovimento.findMany({
       where: intervalo ? { data: { lt: intervalo.lt } } : undefined,
-      select: { conta: true, valor: true, tipo: true, data: true },
+      select: { conta: true, valor: true, tipo: true, data: true, origem: true, destino: true },
     }),
   ]);
   const movs = intervalo ? todos.filter((m) => m.data >= intervalo.gte) : todos;
+  const igual = (a: string | null, b: string) => !!a && a.toLowerCase() === b.toLowerCase();
   return contas.map((c) => {
-    const daConta = movs.filter((m) => m.conta.toLowerCase() === c.nome.toLowerCase());
-    const ateFimDoAno = todos.filter((m) => m.conta.toLowerCase() === c.nome.toLowerCase());
-    const posteriores = c.dataAbertura ? ateFimDoAno.filter((m) => m.data > c.dataAbertura!) : ateFimDoAno;
+    const daConta = movs.filter((m) => igual(m.conta, c.nome));
+    const ateFimDoAno = todos.filter((m) => igual(m.conta, c.nome));
     const receitas = daConta.filter((m) => m.tipo === 'RECEITA').reduce((s, m) => s + m.valor, 0);
     const despesas = daConta.filter((m) => m.tipo === 'DESPESA').reduce((s, m) => s + Math.abs(m.valor), 0);
+    // Como no Sumário do Excel: entrada = transferências recebidas (e saldo transitado),
+    // saída = transferências enviadas.
+    const internos = daConta.filter((m) => m.tipo === 'INTERNO');
+    const entrada = internos.filter((m) => igual(m.destino, c.nome) || (!m.origem && !m.destino && m.valor > 0)).reduce((s, m) => s + m.valor, 0);
+    const saida = internos.filter((m) => igual(m.origem, c.nome) || (!m.origem && !m.destino && m.valor < 0)).reduce((s, m) => s - m.valor, 0);
+    // Saldo: com saldo de abertura anterior ao fim do ano, abertura + movimentos
+    // posteriores; senão, o saldo do ano como no Sumário do Excel.
+    const fimDoAno = intervalo?.lt ?? null;
+    const temAbertura = !!c.dataAbertura && (!fimDoAno || c.dataAbertura < fimDoAno);
+    const saldo = temAbertura
+      ? c.saldoAbertura + ateFimDoAno.filter((m) => m.data > c.dataAbertura!).reduce((s, m) => s + m.valor, 0)
+      : receitas - despesas + entrada - saida;
     return {
       id: c.id,
       nome: c.nome,
-      saldoAbertura: c.saldoAbertura,
-      dataAbertura: c.dataAbertura?.toISOString() ?? null,
-      saldo: arred(c.saldoAbertura + posteriores.reduce((s, m) => s + m.valor, 0)),
+      saldoAbertura: temAbertura ? c.saldoAbertura : 0,
+      dataAbertura: temAbertura ? c.dataAbertura!.toISOString() : null,
+      saldo: arred(saldo),
       receitas: arred(receitas),
       despesas: arred(despesas),
+      entrada: arred(entrada),
+      saida: arred(saida),
+      saldoDoAno: arred(receitas - despesas + entrada - saida),
       movimentos: daConta.length,
     };
   });
+}
+
+// ---------- Importação de movimentos lidos de um ficheiro ----------
+// Não duplica: um movimento igual (conta, data, valor e descrição) que já exista
+// não volta a entrar; movimentos iguais repetidos no mesmo dia contam-se um a um.
+const chave = (m: { conta: string; data: Date; valor: number; descricao: string }) =>
+  `${m.conta.toLowerCase()}|${m.data.toISOString().slice(0, 10)}|${m.valor.toFixed(2)}|${m.descricao.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+
+export async function importarMovimentosLidos(
+  movs: import('@/lib/balancete-ficheiro').MovimentoLido[],
+  listas: { grupo: string; nome: string }[] = [],
+) {
+  const res = { receitas: 0, despesas: 0, internos: 0, repetidos: 0, contasNovas: [] as string[], porAno: {} as Record<string, number> };
+  if (!movs.length) return res;
+  const de = new Date(Math.min(...movs.map((m) => m.data.getTime())));
+  const ate = new Date(Math.max(...movs.map((m) => m.data.getTime())) + 1);
+  const existentes = await prisma.balanceteMovimento.findMany({
+    where: { data: { gte: de, lte: ate } },
+    select: { conta: true, data: true, valor: true, descricao: true },
+  });
+  const contagem = new Map<string, number>();
+  for (const e of existentes) contagem.set(chave(e), (contagem.get(chave(e)) ?? 0) + 1);
+
+  const novos = movs.filter((m) => {
+    const k = chave(m);
+    const n = contagem.get(k) ?? 0;
+    if (n > 0) { contagem.set(k, n - 1); res.repetidos++; return false; }
+    return true;
+  });
+
+  const contas = new Set((await prisma.balanceteConta.findMany({ select: { nome: true } })).map((c) => c.nome.toLowerCase()));
+  for (const nome of [...new Set(novos.map((m) => m.conta))]) {
+    if (contas.has(nome.toLowerCase())) continue;
+    await prisma.balanceteConta.create({ data: { nome, saldoAbertura: 0 } });
+    res.contasNovas.push(nome);
+  }
+  if (listas.length) await prisma.balanceteLista.createMany({ data: listas, skipDuplicates: true });
+
+  for (let i = 0; i < novos.length; i += 200) {
+    await prisma.balanceteMovimento.createMany({ data: novos.slice(i, i + 200) });
+  }
+  for (const m of novos) {
+    if (m.tipo === 'RECEITA') res.receitas++; else if (m.tipo === 'DESPESA') res.despesas++; else res.internos++;
+    const a = String(m.data.getUTCFullYear());
+    res.porAno[a] = (res.porAno[a] ?? 0) + 1;
+  }
+  return res;
 }
 
 export async function dashboardBalancete(ano?: number | null) {

@@ -28,8 +28,9 @@ export async function GET(req: NextRequest) {
   const ordem = sp.get('ordem') === 'valor' ? 'valor' : 'data';
   const dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
   try {
-    const [total, movimentos] = await Promise.all([
+    const [total, soma, movimentos] = await Promise.all([
       prisma.balanceteMovimento.count({ where }),
+      prisma.balanceteMovimento.aggregate({ where, _sum: { valor: true } }),
       prisma.balanceteMovimento.findMany({
         where,
         orderBy: [{ [ordem]: dir }, { id: 'asc' }],
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
         take: POR_PAGINA,
       }),
     ]);
-    return NextResponse.json({ movimentos, total, pagina, paginas: Math.max(1, Math.ceil(total / POR_PAGINA)) });
+    return NextResponse.json({ movimentos, total, soma: Math.round((soma._sum.valor ?? 0) * 100) / 100, pagina, paginas: Math.max(1, Math.ceil(total / POR_PAGINA)) });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Erro' }, { status: 500 });
   }
