@@ -12,7 +12,7 @@ import {
   DOC_TYPES,
 } from '@/lib/moloni';
 import { syncDocumentosFornecedor, type GrupoFornecedor } from '@/lib/moloni-fornecedores';
-import { conciliarDocumentosMoloni } from '@/lib/moloni-conciliar';
+import { conciliarDocumentosMoloni, reabrirSemFatura } from '@/lib/moloni-conciliar';
 
 function moloniStatusLabel(status: number): string {
   switch (status) {
@@ -291,16 +291,15 @@ export async function POST(req: NextRequest) {
     if (type === 'faturas' || type === 'all') {
       results.faturas = await syncDocuments(companyId, grupo);
       // Recibos e notas de crédito ficam logo ligados às faturas que liquidam.
-      if (grupo === 'recibos' || grupo === 'notas') {
-        results.conciliacao = await conciliarDocumentosMoloni(companyId, 'cliente', grupo);
-      }
+      // Depois de importar faturas, concilia os recibos/notas que ainda não a tinham.
+      if (grupo !== 'recibos' && grupo !== 'notas') await reabrirSemFatura('cliente');
+      results.conciliacao = await conciliarDocumentosMoloni(companyId, 'cliente', grupo === 'recibos' || grupo === 'notas' ? grupo : undefined);
     }
 
     if (type === 'documentosFornecedor') {
       results.documentosFornecedor = await syncDocumentosFornecedor(companyId, grupo as GrupoFornecedor | undefined);
-      if (grupo === 'recibos' || grupo === 'notas') {
-        results.conciliacao = await conciliarDocumentosMoloni(companyId, 'fornecedor', grupo);
-      }
+      if (grupo !== 'recibos' && grupo !== 'notas') await reabrirSemFatura('fornecedor');
+      results.conciliacao = await conciliarDocumentosMoloni(companyId, 'fornecedor', grupo === 'recibos' || grupo === 'notas' ? grupo : undefined);
     }
 
     return NextResponse.json({ success: true, results });

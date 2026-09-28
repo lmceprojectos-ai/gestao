@@ -9,14 +9,31 @@
 //  - Fornecedores: um recibo que cobre o que falta valida o pagamento da fatura.
 //  - Nota de crédito/débito: fica ligada à fatura (faturaRelacionadaId).
 //
-// Os recibos e as notas já processados ficam com pagamentoValidado = true (nesses
-// tipos de documento o campo não tem outro uso), para não serem somados duas vezes.
+// Cada recibo/nota fica ligado à (primeira) fatura que liquida (faturaRelacionadaId)
+// e marcado em validadoPor: "Moloni: conciliado" ou "Moloni: sem fatura na app"
+// (fatura de um ano anterior, que não é importada, ou ainda não importada).
+// Os já marcados não voltam a ser processados, para não serem somados duas vezes;
+// os "sem fatura na app" dos últimos 60 dias voltam a ser tentados depois de
+// importar faturas (reabrirSemFatura).
 import { prisma } from '@/lib/db';
 import { moloniRequest } from '@/lib/moloni';
 
 const TIPOS_NOTA = ['nota', 'nota_credito', 'nota_debito'];
 // Pedidos ao Moloni por clique (um por documento), para não esgotar o tempo do pedido.
-const MAX_POR_EXECUCAO = 120;
+const MAX_POR_EXECUCAO = 80;
+
+export const MARCA_CONCILIADO = 'Moloni: conciliado';
+export const MARCA_SEM_FATURA = 'Moloni: sem fatura na app';
+
+// Depois de importar faturas: volta a tentar os recibos/notas recentes que ainda
+// não tinham a fatura na app.
+export async function reabrirSemFatura(origem: 'cliente' | 'fornecedor') {
+  const desde = new Date(Date.now() - 60 * 86400000);
+  await prisma.fatura.updateMany({
+    where: { origem, validadoPor: MARCA_SEM_FATURA, dataEmissao: { gte: desde } },
+    data: { validadoPor: null },
+  });
+}
 
 export type ResultadoConciliacao = {
   conciliados: number;
@@ -41,7 +58,7 @@ export async function conciliarDocumentosMoloni(
       tipo: { in: tipos },
       moloniId: { not: null },
       moloniDocType: { not: null },
-      pagamentoValidado: false,
+      OR: [{ validadoPor: null }, { NOT: { validadoPor: { startsWith: 'Moloni:' } } }],
       estado: { not: 'anulado' },
     },
     select: { id: true, tipo: true, numero: true, moloniId: true, moloniDocType: true, dataEmissao: true },
@@ -88,8 +105,8 @@ export async function conciliarDocumentosMoloni(
         await tx.fatura.update({
           where: { id: doc.id },
           data: {
-            pagamentoValidado: true,
-            ...(TIPOS_NOTA.includes(doc.tipo) && faturas[0] ? { faturaRelacionadaId: faturas[0].id } : {}),
+            validadoPor: faturas.length ? MARCA_CONCILIADO : MARCA_SEM_FATURA,
+            faturaRelacionadaId: faturas[0]?.id ?? null,
           },
         });
       });

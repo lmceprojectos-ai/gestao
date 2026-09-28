@@ -129,7 +129,7 @@ export async function GET() {
     const [faturasAcumLista, despesasAcumLista, fornecedoresFaturadoLista] = await Promise.all([
       // Faturas emitidas (faturação) desde o início do ano
       prisma.fatura.findMany({
-        where: { tipo: 'emitida', estado: { not: 'anulado' }, dataEmissao: { gte: INICIO_ATIVIDADE } },
+        where: { tipo: 'emitida', estado: { notIn: ['anulado', 'rascunho'] }, dataEmissao: { gte: INICIO_ATIVIDADE } },
         select: { id: true, numero: true, descricao: true, valor: true, dataEmissao: true, cliente: { select: { nome: true } } },
         orderBy: { dataEmissao: 'desc' },
       }),

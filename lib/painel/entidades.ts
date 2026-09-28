@@ -27,25 +27,28 @@ export async function painelEntidades(lado: Lado) {
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
   const selDoc = {
-    id: true, tipo: true, numero: true, descricao: true, valor: true, valorReconciliado: true, moloniDocType: true,
+    id: true, tipo: true, numero: true, descricao: true, valor: true, valorReconciliado: true, moloniDocType: true, impostos: true,
     dataEmissao: true, dataVencimento: true, entidadeNome: true, pagamentoValidado: true,
     cliente: { select: { id: true, nome: true } }, fornecedor: { select: { id: true, nome: true } },
     _count: { select: { pagamentos: true, recebimentos: true } },
   } as const;
 
+  // Documentos de clientes em rascunho no Moloni ainda não foram emitidos: não contam.
+  const estadoValido = clientes ? { notIn: ['anulado', 'rascunho'] } : { not: 'anulado' };
+
   const [faturas, recibos, notas, orcamentos, entidades, movPendentes, movMes] = await Promise.all([
     prisma.fatura.findMany({
-      where: { tipo: tipoFatura, estado: { not: 'anulado' }, dataEmissao: { gte: INICIO_ANO } },
+      where: { tipo: tipoFatura, estado: estadoValido, dataEmissao: { gte: INICIO_ANO } },
       select: selDoc,
       orderBy: { dataEmissao: 'desc' },
     }),
     prisma.fatura.findMany({
-      where: { tipo: 'recibo', origem, estado: { not: 'anulado' }, dataEmissao: { gte: INICIO_ANO } },
-      select: selDoc,
+      where: { tipo: 'recibo', origem, estado: estadoValido, dataEmissao: { gte: INICIO_ANO } },
+      select: { ...selDoc, faturaRelacionadaId: true, validadoPor: true },
       orderBy: { dataEmissao: 'desc' },
     }),
     prisma.fatura.findMany({
-      where: { tipo: { in: TIPOS_NOTA }, origem, estado: { not: 'anulado' }, dataEmissao: { gte: INICIO_ANO } },
+      where: { tipo: { in: TIPOS_NOTA }, origem, estado: estadoValido, dataEmissao: { gte: INICIO_ANO } },
       select: selDoc,
       orderBy: { dataEmissao: 'desc' },
     }),
@@ -146,13 +149,20 @@ export async function painelEntidades(lado: Lado) {
       ano: arred(soma(faturas) + efeitoNotas(notas)), quantidadeAno: faturas.length,
       mes: arred(soma(faturasMes) + efeitoNotas(notasMes)), quantidadeMes: faturasMes.length,
       bruto: soma(faturas),
+      semIva: arred(faturas.reduce((s, f) => s + (f.valor ?? 0) - (f.impostos ?? 0), 0)),
     },
     pendentes: {
       total: somaEmFalta(porLiquidar), quantidade: porLiquidar.length,
       vencidas: vencidas.length, valorVencido: somaEmFalta(vencidas),
       itens: pendentesOrdenadas.slice(0, 10).map(doc),
     },
-    recibos: { total: soma(recibos), quantidade: recibos.length },
+    recibos: {
+      total: soma(recibos), quantidade: recibos.length,
+      // Ligados a faturas que estão na app vs. de faturas que a app não tem (anos anteriores).
+      ligados: soma(recibos.filter((r) => r.faturaRelacionadaId)),
+      semFatura: soma(recibos.filter((r) => r.validadoPor === 'Moloni: sem fatura na app')),
+      porConciliar: recibos.filter((r) => !r.validadoPor?.startsWith('Moloni:')).length,
+    },
     notas: {
       total: soma(notas), quantidade: notas.length,
       credito: notas.filter((n) => n.tipo !== 'nota_debito').length,

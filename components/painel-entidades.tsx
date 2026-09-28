@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import {
   LayoutDashboard, Users, Truck, FileText, FileCheck, FileMinus, ArrowDownCircle, ArrowUpCircle,
@@ -14,9 +15,9 @@ type Doc = { id: string; tipo: string; numero: string; entidade: string; valor: 
 type Painel = {
   lado: 'clientes' | 'fornecedores';
   entidades: number;
-  faturas: { ano: number; quantidadeAno: number; mes: number; quantidadeMes: number; bruto: number };
+  faturas: { ano: number; quantidadeAno: number; mes: number; quantidadeMes: number; bruto: number; semIva: number };
   pendentes: { total: number; quantidade: number; vencidas: number; valorVencido: number; itens: Doc[] };
-  recibos: { total: number; quantidade: number };
+  recibos: { total: number; quantidade: number; ligados: number; semFatura: number; porConciliar: number };
   notas: { total: number; quantidade: number; credito: number; debito: number };
   orcamentos: number;
   movimentos: { pendentes: { total: number; quantidade: number }; mes: { total: number; quantidade: number } };
@@ -51,6 +52,9 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
   const clientes = lado === 'clientes';
   const [data, setData] = useState<Painel | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // Fornecedores: documentos criados em duplicado pela importação antiga do Moloni.
+  const [duplicados, setDuplicados] = useState<{ total: number; valor: number; bloqueados: number } | null>(null);
+  const [aLimpar, setALimpar] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -64,7 +68,32 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
     }
   }, [lado]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  const verDuplicados = useCallback(async () => {
+    if (clientes) return;
+    try {
+      const res = await fetch('/api/moloni/fornecedores-duplicados');
+      if (res.ok) setDuplicados(await res.json());
+    } catch {}
+  }, [clientes]);
+
+  useEffect(() => { carregar(); verDuplicados(); }, [carregar, verDuplicados]);
+
+  const limparDuplicados = async () => {
+    if (!duplicados?.total) return;
+    if (!confirm(`Apagar ${duplicados.total} documentos de fornecedores criados pela importação do Moloni?\n\nSão cópias das faturas que já estavam na app (ou faturas que não tinham sido lançadas). As faturas lançadas na app não são tocadas: ficam apenas ligadas ao Moloni.`)) return;
+    setALimpar(true);
+    try {
+      const res = await fetch('/api/moloni/fornecedores-duplicados', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error || 'Erro');
+      toast.success(`${d.apagados} documento(s) duplicado(s) apagado(s); ${d.ligadosAoPar} fatura(s) da app ligada(s) ao Moloni${d.bloqueados ? `; ${d.bloqueados} mantido(s) por terem pagamentos` : ''}`, { duration: 10000 });
+      await Promise.all([carregar(), verDuplicados()]);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao apagar os duplicados');
+    } finally {
+      setALimpar(false);
+    }
+  };
 
   const o = clientes ? 'cliente' : 'fornecedor';
   const links = {
@@ -92,7 +121,7 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
             <p className="text-xs text-muted-foreground mt-0.5">
               {clientes
                 ? 'Importa os documentos novos e atualiza os existentes (os clientes são atualizados primeiro).'
-                : 'Importa os documentos registados nas Compras do Moloni (os fornecedores são atualizados primeiro). Os que já estão na app com o mesmo NIF, número e valor não são duplicados.'}
+                : 'Liga ao Moloni os documentos que já estão na app (mesmo fornecedor e número, ou mesmo valor e data) e concilia recibos e notas de crédito. Não cria documentos novos.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -113,6 +142,18 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
         </div>
       </section>
 
+      {!clientes && !!duplicados?.total && (
+        <section className="rounded-xl p-4 border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <p className="text-sm flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span><strong>{duplicados.total} faturas de fornecedores</strong> ({formatCurrency(duplicados.valor)}) foram criadas pela importação do Moloni e duplicam as que já estavam na app. Remova-as para os valores ficarem certos.</span>
+          </p>
+          <button onClick={limparDuplicados} disabled={aLimpar} className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-60 shrink-0">
+            {aLimpar ? 'A remover...' : 'Remover duplicados'}
+          </button>
+        </section>
+      )}
+
       {erro && <p className="text-sm text-red-600 flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{erro}</p>}
 
       {!data ? (
@@ -129,9 +170,12 @@ export function PainelEntidades({ lado }: { lado: 'clientes' | 'fornecedores' })
               alerta={data.pendentes.vencidas > 0} />
             <Cartao href={links.faturas} icon={FileText} cor="text-purple-600"
               titulo={clientes ? 'Faturas Clientes (ano)' : 'Faturas Fornecedores (ano)'} valor={formatCurrency(data.faturas.ano)}
-              detalhe={`${plural(data.faturas.quantidadeAno, 'fatura', 'faturas')}${data.notas.quantidade ? ' · já sem notas de crédito' : ''} · este mês ${formatCurrency(data.faturas.mes)}`} />
+              detalhe={`com IVA · sem IVA ${formatCurrency(data.faturas.semIva)} · este mês ${formatCurrency(data.faturas.mes)}`} />
             <Cartao href={links.recibos} icon={FileCheck} cor="text-teal-600"
-              titulo="Recibos (ano)" valor={formatCurrency(data.recibos.total)} detalhe={plural(data.recibos.quantidade, 'recibo', 'recibos')} />
+              titulo="Recibos (ano)" valor={formatCurrency(data.recibos.total)}
+              detalhe={data.recibos.porConciliar
+                ? `${plural(data.recibos.quantidade, 'recibo', 'recibos')} · ${data.recibos.porConciliar} por conciliar (botão Recibos)`
+                : `${formatCurrency(data.recibos.ligados)} de faturas deste ano${data.recibos.semFatura ? ` · ${formatCurrency(data.recibos.semFatura)} de faturas anteriores` : ''}`} />
             <Cartao href={links.notas} icon={FileMinus} cor="text-amber-600"
               titulo="Notas de Crédito (ano)" valor={formatCurrency(data.notas.total)}
               detalhe={`${plural(data.notas.credito, 'de crédito', 'de crédito')}${data.notas.debito ? ` · ${data.notas.debito} de débito` : ''}`} />

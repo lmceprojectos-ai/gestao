@@ -1010,6 +1010,9 @@ function FaturasPageInner() {
                         </div>
                         {f?.descricao && <div className="text-xs text-muted-foreground truncate max-w-[200px]">{f.descricao}</div>}
                         {f?.moloniDocType && <div className="text-xs text-muted-foreground">{f.moloniDocType}</div>}
+                        {(f?.tipo === 'recibo' || isNotaTipo(f?.tipo)) && (f?.faturaRelacionada?.numero
+                          ? <div className="text-xs text-emerald-700 dark:text-emerald-400">{f.tipo === 'recibo' ? 'Paga' : 'Credita'} a fatura {f.faturaRelacionada.numero}</div>
+                          : f?.validadoPor === 'Moloni: sem fatura na app' ? <div className="text-xs text-amber-700 dark:text-amber-400">De uma fatura que não está na app (ano anterior)</div> : null)}
                         {(f?.criadoPor || f?.updatedAt) && <div className="text-[11px] text-muted-foreground/70 mt-0.5">{f?.criadoPor ? `Registado por ${f.criadoPor}` : ''}{f?.criadoPor && f?.updatedAt ? ' · ' : ''}{f?.updatedAt ? `atualizado ${formatDate(f.updatedAt)}` : ''}</div>}
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell">

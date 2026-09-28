@@ -52,9 +52,11 @@ export function MoloniSyncButton({ alvo, label = 'Sincronizar Moloni', onDone }:
         : doFornecedor ? data.results.documentosFornecedor : data.results.faturas;
       const c = data.results.conciliacao;
       const erros: string[] = [...(r?.errors ?? []), ...(c?.erros ?? [])];
-      const resumo = `${r?.imported ?? 0} novo(s), ${r?.updated ?? 0} atualizado(s)${r?.linked ? `, ${r.linked} já existente(s) ligado(s)` : ''}`;
+      const resumo = doFornecedor
+        ? `${r?.linked ?? 0} documento(s) da app ligado(s) ao Moloni, ${r?.updated ?? 0} já estavam ligados${r?.naoNaApp ? `. ${r.naoNaApp} estão no Moloni mas não na app (não foram criados), ex.: ${(r.exemplosNaoNaApp ?? []).slice(0, 2).join('; ')}` : ''}`
+        : `${r?.imported ?? 0} novo(s), ${r?.updated ?? 0} atualizado(s)`;
       const conciliacao = c
-        ? `. Conciliados com as faturas: ${c.conciliados}${c.faturasLiquidadas ? ` (${c.faturasLiquidadas} fatura(s) liquidada(s))` : ''}${c.semFatura ? `, ${c.semFatura} sem a fatura na app` : ''}${c.porProcessar ? `. Faltam ${c.porProcessar}: carregue outra vez` : ''}`
+        ? `. Conciliados com as faturas: ${c.conciliados}${c.faturasLiquidadas ? ` (${c.faturasLiquidadas} fatura(s) liquidada(s))` : ''}${c.semFatura ? `, ${c.semFatura} sem a fatura na app` : ''}${c.porProcessar ? `. Faltam ${c.porProcessar} por conciliar: carregue outra vez` : ''}`
         : '';
       if (erros.length) toast.warning(`Moloni: ${resumo}${conciliacao}. ${erros.length} erro(s): ${erros[0]}`, { id, duration: 12000 });
       else toast.success(`Moloni sincronizado: ${resumo}${conciliacao}`, { id, duration: c ? 10000 : 4000 });

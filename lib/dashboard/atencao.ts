@@ -40,7 +40,7 @@ export async function calcularAtencao() {
           dataEmissao: { gte: INICIO_ANO },
         },
         select: {
-          id: true, tipo: true, numero: true, descricao: true, valor: true, valorReconciliado: true, moloniDocType: true,
+          id: true, tipo: true, estado: true, numero: true, descricao: true, valor: true, valorReconciliado: true, moloniDocType: true,
           dataEmissao: true, dataVencimento: true, entidadeNome: true,
           cliente: { select: { nome: true } }, fornecedor: { select: { nome: true } },
         },
@@ -58,6 +58,7 @@ export async function calcularAtencao() {
 
   // Faturas-recibo e faturas já liquidadas no Moloni não estão por pagar.
   const porLiquidar = faturas.filter((f) => {
+    if (f.tipo === 'emitida' && f.estado === 'rascunho') return false; // ainda não emitida no Moloni
     if (f.moloniDocType === 'invoiceReceipts') return false;
     if (f.valor != null && f.valorReconciliado != null && f.valorReconciliado >= f.valor - 0.01) return false;
     return (f.valor ?? 0) > 0;
