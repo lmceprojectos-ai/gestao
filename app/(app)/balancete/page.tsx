@@ -4,11 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Scale, TrendingUp, TrendingDown, DollarSign, Activity, Landmark, Search, ListFilter,
-  ArrowUpDown, ChevronLeft, ChevronRight, Loader2, DatabaseBackup,
+  ArrowUpDown, ChevronLeft, ChevronRight, Loader2, DatabaseBackup, Banknote, UserRound, BarChart3,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
 import { formatCurrency, formatDate } from '@/lib/format';
+
+const GraficoTrimestres = dynamic(() => import('./graficos').then((m) => m.GraficoTrimestres), { ssr: false, loading: () => <div className="h-[300px] bg-muted rounded-lg animate-pulse" /> });
+const GraficoCategorias = dynamic(() => import('./graficos').then((m) => m.GraficoCategorias), { ssr: false, loading: () => <div className="h-[300px] bg-muted rounded-lg animate-pulse" /> });
 
 // Balancete (trazido de balancete2026.abacusai.app): dashboard, movimentos,
 // contas e relatórios. O que entra aparece a verde e o que sai a vermelho.
@@ -58,7 +63,7 @@ export default function BalancetePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Scale} title="Balancete" description="Visão geral financeira do ano fiscal (dados do balancete2026)" />
+      <PageHeader icon={Scale} title="Balancete" description="Visão geral financeira do ano fiscal 2025/2026" />
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
         {SEPARADORES.map((s) => (
@@ -85,84 +90,120 @@ export default function BalancetePage() {
   );
 }
 
+// Valores como no balancete2026: "€90 746,80".
+const euro = (v: number) => `€${v.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 function Cartao({ titulo, valor, cor, icon: Icon, fundo }: { titulo: string; valor: string; cor?: string; icon: any; fundo: string }) {
   return (
-    <div className="bg-card rounded-xl p-4 border border-border shadow-sm flex items-start justify-between gap-3">
-      <div>
-        <p className="text-xs text-muted-foreground">{titulo}</p>
-        <p className={`text-2xl font-bold font-mono tabular-nums mt-1 ${cor ?? ''}`}>{valor}</p>
+    <div className="bg-card rounded-xl p-5 border border-border shadow-sm flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm text-muted-foreground">{titulo}</p>
+        <p className={`text-xl font-bold font-mono tabular-nums mt-1 ${cor ?? ''}`}>{valor}</p>
       </div>
-      <div className={`p-2.5 rounded-xl ${fundo}`}><Icon className="h-5 w-5" /></div>
+      <div className={`p-2.5 rounded-lg shrink-0 ${fundo}`}><Icon className="h-5 w-5" /></div>
     </div>
   );
 }
 
+// Cores das contas bancárias (como no site); as outras usam azul.
+const ESTILO_CONTA: Record<string, { fundo: string; bola: string }> = {
+  cgd: { fundo: 'from-orange-500 via-orange-600 to-amber-800', bola: 'bg-yellow-300' },
+  montepio: { fundo: 'from-emerald-600 via-emerald-700 to-emerald-900', bola: 'bg-green-500' },
+};
+const estiloConta = (nome: string) => ESTILO_CONTA[nome.toLowerCase()] ?? { fundo: 'from-blue-600 via-blue-700 to-blue-900', bola: 'bg-sky-300' };
+
 function SeparadorDashboard({ dash }: { dash: Dashboard | null }) {
   if (!dash) return <div className="h-64 bg-muted rounded-xl animate-pulse" />;
-  const maxQ = Math.max(1, ...dash.trimestres.flatMap((t) => [t.receitas, t.despesas]));
-  const totalCat = dash.categorias.reduce((s, c) => s + c.valor, 0) || 1;
+  // Contas bancárias: com movimentos ou saldo; as outras (sócia, gerente, caixa) em cartões pequenos.
+  const bancarias = dash.contas.filter((c) => c.movimentos > 0 || c.saldo !== 0);
+  const ORDEM = ['sócia', 'gerente', 'cash'];
+  const pos = (n: string) => { const i = ORDEM.indexOf(n.toLowerCase()); return i < 0 ? 99 : i; };
+  const outras = dash.contas.filter((c) => !bancarias.includes(c)).sort((a, b) => pos(a.nome) - pos(b.nome));
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Cartao titulo="Total Receitas" valor={formatCurrency(dash.totalReceitas)} cor="text-emerald-700 dark:text-emerald-400" icon={TrendingUp} fundo="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30" />
-        <Cartao titulo="Total Despesas" valor={formatCurrency(dash.totalDespesas)} cor="text-red-700 dark:text-red-400" icon={TrendingDown} fundo="bg-red-50 text-red-600 dark:bg-red-900/30" />
-        <Cartao titulo="Resultado Líquido" valor={formatCurrency(dash.resultado)} cor={corValor(dash.resultado)} icon={DollarSign} fundo="bg-blue-50 text-blue-600 dark:bg-blue-900/30" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Cartao titulo="Total Receitas" valor={euro(dash.totalReceitas)} cor="text-emerald-600" icon={TrendingUp} fundo="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30" />
+        <Cartao titulo="Total Despesas" valor={euro(dash.totalDespesas)} cor="text-red-600" icon={TrendingDown} fundo="bg-red-50 text-red-600 dark:bg-red-900/30" />
+        <Cartao titulo="Resultado Líquido" valor={euro(dash.resultado)} cor={dash.resultado >= 0 ? 'text-emerald-600' : 'text-red-600'} icon={DollarSign} fundo="bg-blue-50 text-blue-600 dark:bg-blue-900/30" />
         <Cartao titulo="Movimentos" valor={String(dash.totalMovimentos)} icon={Activity} fundo="bg-purple-50 text-purple-600 dark:bg-purple-900/30" />
       </div>
 
-      <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
-        <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Landmark className="h-4 w-4" />SALDO BANCÁRIO TOTAL</p>
-        <p className={`text-3xl font-bold font-mono tabular-nums mt-1 ${corValor(dash.saldoTotal)}`}>{formatCurrency(dash.saldoTotal)}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-          {dash.contas.map((c) => (
-            <div key={c.id} className="rounded-lg border border-border p-3">
-              <p className="font-semibold">{c.nome}</p>
-              <p className="text-xs text-muted-foreground">Saldo atual</p>
-              <p className={`text-xl font-bold font-mono tabular-nums ${corValor(c.saldo)}`}>{formatCurrency(c.saldo)}</p>
-            </div>
-          ))}
+      <div className="rounded-xl p-5 border-2 border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-900/50 shadow-sm flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-300 flex items-center gap-2"><Landmark className="h-4 w-4" />SALDO BANCÁRIO TOTAL</p>
+          <p className="text-4xl font-bold font-mono tabular-nums mt-1">{euro(dash.saldoTotal)}</p>
         </div>
+        <div className="p-4 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"><Landmark className="h-7 w-7" /></div>
       </div>
+
+      {bancarias.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {bancarias.map((c) => {
+            const e = estiloConta(c.nome);
+            return (
+              <div key={c.id} className={`rounded-xl p-6 text-white shadow-md bg-gradient-to-br ${e.fundo}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`h-9 w-9 rounded-full border-2 border-black/80 ${e.bola}`} />
+                    <div>
+                      <p className="text-lg font-bold">{c.nome}</p>
+                      <p className="text-xs text-white/80">Conta Bancária</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-white/20 flex items-center gap-1">
+                    {c.saldo >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}{c.saldo >= 0 ? 'Positivo' : 'Negativo'}
+                  </span>
+                </div>
+                <p className="text-xs uppercase tracking-wide text-white/80 mt-5">Saldo atual</p>
+                <p className="text-4xl font-bold font-mono tabular-nums">{euro(c.saldo)}</p>
+                <div className="border-t border-white/25 mt-4 pt-3 flex justify-between text-xs text-white/85">
+                  <span>Saldo abertura: {euro(c.saldoAbertura)}</span>
+                  <span>{c.dataAbertura ? formatDate(c.dataAbertura) : ''}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {outras.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {outras.map((c) => {
+            const Icon = /cash|caixa/i.test(c.nome) ? Banknote : UserRound;
+            return (
+              <div key={c.id} className="bg-card rounded-xl p-4 border border-border shadow-sm text-center">
+                <Icon className="h-6 w-6 mx-auto text-slate-700 dark:text-slate-300" />
+                <p className="text-sm text-muted-foreground mt-2">{c.nome}</p>
+                <p className={`font-bold font-mono tabular-nums ${c.saldo >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{euro(c.saldo)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
-          <h2 className="text-base font-semibold mb-3">Receitas e despesas por trimestre</h2>
-          <div className="space-y-3">
-            {dash.trimestres.map((t) => (
-              <div key={t.trimestre}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="font-semibold">{t.trimestre}</span>
-                  <span className="text-muted-foreground">margem {t.margem.toLocaleString('pt-PT')}%</span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs">
-                    <div className="flex-1 h-3 bg-muted rounded overflow-hidden"><div className="h-full bg-emerald-500/70" style={{ width: `${(t.receitas / maxQ) * 100}%` }} /></div>
-                    <span className="w-24 text-right font-mono tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(t.receitas)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <div className="flex-1 h-3 bg-muted rounded overflow-hidden"><div className="h-full bg-red-500/60" style={{ width: `${(t.despesas / maxQ) * 100}%` }} /></div>
-                    <span className="w-24 text-right font-mono tabular-nums text-red-700 dark:text-red-400">{formatCurrency(t.despesas)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-base font-semibold mb-2 flex items-center gap-2"><BarChart3 className="h-4 w-4" />Receitas vs Despesas por Trimestre</h2>
+          <GraficoTrimestres dados={dash.trimestres} />
         </section>
         <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
-          <h2 className="text-base font-semibold mb-3">Despesas por categoria</h2>
-          {dash.categorias.length === 0 ? <p className="text-sm text-muted-foreground">Sem despesas.</p> : (
-            <div className="space-y-2">
-              {dash.categorias.map((c) => (
-                <div key={c.nome} className="flex items-center gap-2 text-xs">
-                  <span className="w-36 truncate" title={c.nome}>{c.nome}</span>
-                  <div className="flex-1 h-3 bg-muted rounded overflow-hidden"><div className="h-full bg-red-500/60" style={{ width: `${(c.valor / totalCat) * 100}%` }} /></div>
-                  <span className="w-24 text-right font-mono tabular-nums">{formatCurrency(c.valor)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <h2 className="text-base font-semibold mb-2 flex items-center gap-2"><PieChartIcon className="h-4 w-4" />Despesas por Categoria</h2>
+          {dash.categorias.length === 0 ? <p className="text-sm text-muted-foreground">Sem despesas.</p> : <GraficoCategorias dados={dash.categorias} />}
         </section>
       </div>
+
+      <section className="bg-card rounded-xl p-5 border border-border shadow-sm">
+        <h2 className="text-base font-semibold mb-4 flex items-center gap-2"><Activity className="h-4 w-4" />Margem por Trimestre</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {dash.trimestres.map((t) => (
+            <div key={t.trimestre} className="rounded-lg bg-muted/50 p-4 text-center">
+              <p className="text-lg font-semibold">{t.trimestre}</p>
+              <p className={`text-xl font-bold font-mono tabular-nums ${t.margem >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{t.margem.toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground mt-1">R: {euro(t.receitas).replace(',00', '')} | D: {euro(t.despesas).replace(',00', '')}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
