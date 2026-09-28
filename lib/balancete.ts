@@ -146,6 +146,36 @@ async function contasComSaldo(ano?: number | null) {
   });
 }
 
+// ---------- Substituir um ano ----------
+// Apaga os movimentos de um ano antes de importar a versão corrigida do ficheiro.
+// Antes de apagar guarda-os num backup (Gestão → Backups), que se pode repor.
+export async function apagarAno(ano: number, criadoPor: string | null) {
+  const intervalo = intervaloAno(ano)!;
+  const movs = await prisma.balanceteMovimento.findMany({ where: { data: intervalo }, orderBy: { data: 'asc' } });
+  if (!movs.length) return { apagados: 0, backupId: null as string | null };
+  const { guardarBackup } = await import('@/lib/backups');
+  const json = {
+    formato: 'balancete2026-backup-v1',
+    exportadoEm: new Date().toISOString(),
+    origem: 'balancete (app) — antes de substituir o ano ' + ano,
+    accounts: [],
+    movements: movs.map((m) => ({
+      id: m.id, date: m.data.toISOString(), value: m.valor, description: m.descricao, method: m.metodo, account: m.conta,
+      category: m.categoria, subcategory: m.subcategoria, fiscal: m.fiscal, type: m.tipo, quarter: m.trimestre,
+      origin: m.origem, destination: m.destino, note: m.nota, createdAt: m.createdAt.toISOString(),
+    })),
+  };
+  const b = await guardarBackup({
+    nome: `balancete-${ano}-antes-de-substituir.json`,
+    descricao: `Balancete ${ano}: ${movs.length} movimentos guardados antes de substituir o ano`,
+    origem: 'balancete (substituir ano)',
+    conteudo: Buffer.from(JSON.stringify(json)),
+    criadoPor,
+  });
+  const r = await prisma.balanceteMovimento.deleteMany({ where: { data: intervalo } });
+  return { apagados: r.count, backupId: b.id };
+}
+
 // ---------- Importação de movimentos lidos de um ficheiro ----------
 // Não duplica: um movimento igual (conta, data, valor e descrição) que já exista
 // não volta a entrar; movimentos iguais repetidos no mesmo dia contam-se um a um.

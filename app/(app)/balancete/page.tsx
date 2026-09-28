@@ -453,6 +453,8 @@ function ImportarFicheiro({ onFeito }: { onFeito: () => void }) {
   const [aberto, setAberto] = useState(false);
   const [contas, setContas] = useState<string[]>([]);
   const [conta, setConta] = useState('');
+  const [substituirAno, setSubstituirAno] = useState('');
+  const anoAtual = new Date().getFullYear();
   const [aEnviar, setAEnviar] = useState(false);
   const [resultado, setResultado] = useState<any>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -468,10 +470,16 @@ function ImportarFicheiro({ onFeito }: { onFeito: () => void }) {
       const fd = new FormData();
       fd.append('file', file);
       if (conta) fd.append('conta', conta);
+      if (substituirAno) {
+        if (!confirm(`Substituir o ano ${substituirAno}?\n\nTodos os movimentos de ${substituirAno} no Balancete são apagados e trocados pelos do ficheiro. Antes de apagar fica um backup em Gestão → Backups.`)) { setAEnviar(false); return; }
+        fd.append('substituirAno', substituirAno);
+      }
       const r = await fetch('/api/balancete/importar', { method: 'POST', body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d?.error || 'Erro ao importar');
       setResultado(d);
+      if (d.substituicao) toast.info(`Ano ${d.substituicao.ano}: ${d.substituicao.apagados} movimentos antigos apagados (backup guardado)`, { duration: 8000 });
+      setSubstituirAno('');
       toast.success(`Importado: ${d.receitas} receitas, ${d.despesas} despesas, ${d.internos} mov. internos${d.repetidos ? ` (${d.repetidos} já existiam)` : ''}`, { duration: 8000 });
       onFeito();
     } catch (e: any) {
@@ -495,6 +503,12 @@ function ImportarFicheiro({ onFeito }: { onFeito: () => void }) {
             Movimentos que já existam não são repetidos.
           </p>
           <label className="block">
+            <span className="text-xs text-muted-foreground">Substituir o ano (para importar um ficheiro corrigido)</span>
+            <select value={substituirAno} onChange={(e) => setSubstituirAno(e.target.value)} className="mt-1 mb-3 w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground">
+              <option value="">Não — só acrescentar movimentos novos</option>
+              {Array.from({ length: 6 }, (_, i) => anoAtual - i).map((a) => <option key={a} value={a}>Sim — apagar {a} e importar de novo</option>)}
+            </select>
+            {substituirAno && <p className="-mt-2 mb-3 text-xs text-amber-700 dark:text-amber-400">Os movimentos de {substituirAno} são apagados (com backup) e substituídos pelos do ficheiro. Os outros anos não mudam.</p>}
             <span className="text-xs text-muted-foreground">Conta (só para extratos sem coluna de conta)</span>
             <select value={conta} onChange={(e) => setConta(e.target.value)} className="mt-1 w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground">
               <option value="">—</option>{contas.map((c) => <option key={c}>{c}</option>)}
