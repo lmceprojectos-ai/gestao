@@ -9,6 +9,31 @@ import { prisma } from '@/lib/db';
 export const TRIMESTRES = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
 const arred = (n: number) => Math.round(n * 100) / 100;
 
+// Movimentos de um ano (datas guardadas à meia-noite UTC).
+export function intervaloAno(ano?: number | null) {
+  if (!ano) return undefined;
+  return { gte: new Date(Date.UTC(ano, 0, 1)), lt: new Date(Date.UTC(ano + 1, 0, 1)) };
+}
+
+export function anoDoPedido(v: string | null) {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 2000 && n < 2100 ? n : null;
+}
+
+// Anos com movimentos, mais o ano atual (o mais recente primeiro).
+export async function anosBalancete() {
+  const [primeiro, ultimo] = await Promise.all([
+    prisma.balanceteMovimento.findFirst({ orderBy: { data: 'asc' }, select: { data: true } }),
+    prisma.balanceteMovimento.findFirst({ orderBy: { data: 'desc' }, select: { data: true } }),
+  ]);
+  const atual = new Date().getFullYear();
+  const de = Math.min(primeiro?.data.getUTCFullYear() ?? atual, atual);
+  const ate = Math.max(ultimo?.data.getUTCFullYear() ?? atual, atual);
+  const anos: number[] = [];
+  for (let a = ate; a >= de; a--) anos.push(a);
+  return anos;
+}
+
 export function trimestreDe(data: Date) {
   return `Q${Math.floor(data.getUTCMonth() / 3) + 1}`;
 }
@@ -76,14 +101,21 @@ export async function importarBackupBalancete(b: BackupBalancete) {
 }
 
 // ---------- Cálculos ----------
-async function contasComSaldo() {
-  const [contas, movs] = await Promise.all([
+// Com ano: receitas/despesas desse ano e saldo no fim desse ano.
+async function contasComSaldo(ano?: number | null) {
+  const intervalo = intervaloAno(ano);
+  const [contas, todos] = await Promise.all([
     prisma.balanceteConta.findMany({ orderBy: { nome: 'asc' } }),
-    prisma.balanceteMovimento.findMany({ select: { conta: true, valor: true, tipo: true, data: true } }),
+    prisma.balanceteMovimento.findMany({
+      where: intervalo ? { data: { lt: intervalo.lt } } : undefined,
+      select: { conta: true, valor: true, tipo: true, data: true },
+    }),
   ]);
+  const movs = intervalo ? todos.filter((m) => m.data >= intervalo.gte) : todos;
   return contas.map((c) => {
     const daConta = movs.filter((m) => m.conta.toLowerCase() === c.nome.toLowerCase());
-    const posteriores = c.dataAbertura ? daConta.filter((m) => m.data > c.dataAbertura!) : daConta;
+    const ateFimDoAno = todos.filter((m) => m.conta.toLowerCase() === c.nome.toLowerCase());
+    const posteriores = c.dataAbertura ? ateFimDoAno.filter((m) => m.data > c.dataAbertura!) : ateFimDoAno;
     const receitas = daConta.filter((m) => m.tipo === 'RECEITA').reduce((s, m) => s + m.valor, 0);
     const despesas = daConta.filter((m) => m.tipo === 'DESPESA').reduce((s, m) => s + Math.abs(m.valor), 0);
     return {
@@ -99,10 +131,11 @@ async function contasComSaldo() {
   });
 }
 
-export async function dashboardBalancete() {
+export async function dashboardBalancete(ano?: number | null) {
+  const intervalo = intervaloAno(ano);
   const [movs, contas] = await Promise.all([
-    prisma.balanceteMovimento.findMany({ select: { valor: true, tipo: true, trimestre: true, categoria: true } }),
-    contasComSaldo(),
+    prisma.balanceteMovimento.findMany({ where: intervalo ? { data: intervalo } : undefined, select: { valor: true, tipo: true, trimestre: true, categoria: true } }),
+    contasComSaldo(ano),
   ]);
   const receitas = movs.filter((m) => m.tipo === 'RECEITA');
   const despesas = movs.filter((m) => m.tipo === 'DESPESA');
@@ -129,8 +162,9 @@ export async function dashboardBalancete() {
 
 export { contasComSaldo };
 
-export async function relatoriosBalancete() {
-  const movs = await prisma.balanceteMovimento.findMany({ orderBy: { data: 'desc' } });
+export async function relatoriosBalancete(ano?: number | null) {
+  const intervalo = intervaloAno(ano);
+  const movs = await prisma.balanceteMovimento.findMany({ where: intervalo ? { data: intervalo } : undefined, orderBy: { data: 'desc' } });
   const cat = new Map<string, { receitas: number; despesas: number }>();
   for (const m of movs) {
     if (m.tipo === 'INTERNO') continue;

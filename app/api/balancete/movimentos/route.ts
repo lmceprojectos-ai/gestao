@@ -4,10 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { anoDoPedido, intervaloAno } from '@/lib/balancete';
 
 const POR_PAGINA = 50;
 
-// GET ?q=&trimestre=&tipo=&categoria=&conta=&pagina=1&ordem=data|valor&dir=asc|desc
+// GET ?ano=&q=&trimestre=&tipo=&categoria=&conta=&pagina=1&ordem=data|valor&dir=asc|desc
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
@@ -15,6 +16,8 @@ export async function GET(req: NextRequest) {
   const where: any = {};
   const q = (sp.get('q') || '').trim();
   if (q) where.descricao = { contains: q };
+  const intervalo = intervaloAno(anoDoPedido(sp.get('ano')));
+  if (intervalo) where.data = intervalo;
   if (sp.get('trimestre')) where.trimestre = sp.get('trimestre');
   if (sp.get('tipo')) where.tipo = sp.get('tipo');
   if (sp.get('conta')) where.conta = sp.get('conta');

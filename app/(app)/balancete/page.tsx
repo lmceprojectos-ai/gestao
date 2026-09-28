@@ -28,7 +28,7 @@ type Movimento = {
   id: string; data: string; valor: number; descricao: string; metodo: string | null; conta: string; categoria: string | null;
   subcategoria: string | null; fiscal: string | null; tipo: string; trimestre: string; nota: string | null;
 };
-type Listas = { categorias: string[]; subcategorias: string[]; metodos: string[]; contas: string[] };
+type Listas = { categorias: string[]; subcategorias: string[]; metodos: string[]; contas: string[]; anos: number[] };
 
 const SEPARADORES = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -48,44 +48,58 @@ const corValor = (v: number) => (v >= 0 ? 'text-emerald-700 dark:text-emerald-40
 
 export default function BalancetePage() {
   const [separador, setSeparador] = useState<Separador>('dashboard');
+  // Ano mostrado: por defeito o ano atual; os anteriores escolhem-se ao lado dos separadores.
+  const [ano, setAno] = useState(() => new Date().getFullYear());
+  const [anos, setAnos] = useState<number[]>([new Date().getFullYear()]);
+  useEffect(() => {
+    fetch('/api/balancete/listas').then((r) => r.json()).then((l) => { if (Array.isArray(l?.anos) && l.anos.length) setAnos(l.anos); }).catch(() => {});
+  }, []);
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const carregarDashboard = useCallback(() => {
-    fetch('/api/balancete')
+    setDash(null);
+    fetch(`/api/balancete?ano=${ano}`)
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d?.error || 'Erro'); return d; })
       .then((d) => { setDash(d); setErro(null); })
       .catch((e) => setErro(e.message));
-  }, []);
+  }, [ano]);
   useEffect(() => { carregarDashboard(); }, [carregarDashboard]);
 
   const vazio = dash && dash.totalMovimentos === 0 && dash.contas.length === 0;
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Scale} title="Balancete" description="Visão geral financeira do ano fiscal 2025/2026" />
+      <PageHeader icon={Scale} title="Balancete" description={`Visão geral financeira do ano fiscal ${ano}`} />
 
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
+      <div className="flex items-end gap-1 border-b border-border overflow-x-auto">
         {SEPARADORES.map((s) => (
           <button key={s.key} onClick={() => setSeparador(s.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${separador === s.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {s.label}
           </button>
         ))}
+        <label className="ml-auto mb-1.5 flex items-center gap-2 text-sm shrink-0">
+          <span className="text-muted-foreground">Ano</span>
+          <select value={ano} onChange={(e) => setAno(Number(e.target.value))}
+            className="px-3 py-1.5 border border-input rounded-lg text-sm font-semibold bg-background text-foreground">
+            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </label>
       </div>
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
       {vazio && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200 p-4 text-sm flex items-center gap-3">
           <DatabaseBackup className="h-5 w-5 shrink-0" />
-          <span>O balancete ainda não tem dados. Em <Link href="/backups" className="underline font-medium">Backups</Link>, carregue em "Repor no Balancete" no backup do balancete2026.</span>
+          <span>{ano !== new Date().getFullYear() ? `Sem movimentos em ${ano}.` : 'O balancete ainda não tem dados.'} Em <Link href="/backups" className="underline font-medium">Backups</Link>, carregue em "Repor no Balancete" no backup do balancete2026.</span>
         </div>
       )}
 
       {separador === 'dashboard' && <SeparadorDashboard dash={dash} />}
-      {separador === 'movimentos' && <SeparadorMovimentos onAlterado={carregarDashboard} />}
+      {separador === 'movimentos' && <SeparadorMovimentos ano={ano} onAlterado={carregarDashboard} />}
       {separador === 'contas' && <SeparadorContas contas={dash?.contas ?? null} saldoTotal={dash?.saldoTotal ?? 0} />}
-      {separador === 'relatorios' && <SeparadorRelatorios />}
+      {separador === 'relatorios' && <SeparadorRelatorios ano={ano} />}
     </div>
   );
 }
@@ -208,8 +222,8 @@ function SeparadorDashboard({ dash }: { dash: Dashboard | null }) {
   );
 }
 
-function SeparadorMovimentos({ onAlterado }: { onAlterado: () => void }) {
-  const [listas, setListas] = useState<Listas>({ categorias: [], subcategorias: [], metodos: [], contas: [] });
+function SeparadorMovimentos({ ano, onAlterado }: { ano: number; onAlterado: () => void }) {
+  const [listas, setListas] = useState<Listas>({ categorias: [], subcategorias: [], metodos: [], contas: [], anos: [] });
   const [q, setQ] = useState('');
   const [procura, setProcura] = useState('');
   const [filtros, setFiltros] = useState({ trimestre: '', tipo: '', categoria: '', conta: '' });
@@ -224,9 +238,10 @@ function SeparadorMovimentos({ onAlterado }: { onAlterado: () => void }) {
   useEffect(() => { const t = setTimeout(() => { setProcura(q); setPagina(1); }, 300); return () => clearTimeout(t); }, [q]);
 
   useEffect(() => {
-    const qs = new URLSearchParams({ q: procura, ...filtros, pagina: String(pagina), ordem: ordem.campo, dir: ordem.dir });
+    const qs = new URLSearchParams({ ano: String(ano), q: procura, ...filtros, pagina: String(pagina), ordem: ordem.campo, dir: ordem.dir });
     fetch(`/api/balancete/movimentos?${qs}`).then((r) => r.json()).then(setRes).catch(() => {});
-  }, [procura, filtros, pagina, ordem]);
+  }, [ano, procura, filtros, pagina, ordem]);
+  useEffect(() => { setPagina(1); }, [ano]);
 
   const mudarFiltro = (k: keyof typeof filtros, v: string) => { setFiltros((f) => ({ ...f, [k]: v })); setPagina(1); };
   const ordenar = (campo: 'data' | 'valor') =>
@@ -340,7 +355,7 @@ function SeparadorContas({ contas, saldoTotal }: { contas: Conta[] | null; saldo
       <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
         <p className="text-sm text-muted-foreground">Saldo Total Calculado</p>
         <p className={`text-3xl font-bold font-mono tabular-nums ${corValor(saldoTotal)}`}>{formatCurrency(saldoTotal)}</p>
-        <p className="text-xs text-muted-foreground mt-1">Saldo de abertura + movimentos registados depois da data de abertura</p>
+        <p className="text-xs text-muted-foreground mt-1">Saldo de abertura + movimentos registados depois da data de abertura, até ao fim do ano escolhido. Receitas e despesas do ano escolhido.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {contas.map((c) => (
@@ -363,10 +378,10 @@ function SeparadorContas({ contas, saldoTotal }: { contas: Conta[] | null; saldo
   );
 }
 
-function SeparadorRelatorios() {
+function SeparadorRelatorios({ ano }: { ano: number }) {
   const [dados, setDados] = useState<any>(null);
   const [vista, setVista] = useState<'categoria' | 'trimestre' | 'fiscais'>('categoria');
-  useEffect(() => { fetch('/api/balancete/relatorios').then((r) => r.json()).then(setDados).catch(() => {}); }, []);
+  useEffect(() => { setDados(null); fetch(`/api/balancete/relatorios?ano=${ano}`).then((r) => r.json()).then(setDados).catch(() => {}); }, [ano]);
   if (!dados) return <div className="h-64 bg-muted rounded-xl animate-pulse" />;
 
   const totalR = (l: any[]) => l.reduce((s, x) => s + x.receitas, 0);
