@@ -49,9 +49,27 @@ export function podeAlterar(u: UtilizadorParceiros, reg: { company: string; parc
   return reg.company === 'PARCEIRO' && !!reg.parceiroId && reg.parceiroId === u.parceiroId;
 }
 
-// Parceiro da conta pedida (?conta=), já com a verificação de acesso.
+// Nome da empresa no endereço: "Reclamarte" → reclamarte, "Ex. Lda" → ex-lda.
+export function slugParceiro(nome: string) {
+  return nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'parceiro';
+}
+
+// Endereço da conta de um parceiro (pelo nome; se houver outro com o mesmo nome, pelo id).
+export function linkParceiro(p: { id: string; nome: string }, todos: { id: string; nome: string }[]) {
+  const slug = slugParceiro(p.nome);
+  const repetido = todos.some((o) => o.id !== p.id && slugParceiro(o.nome) === slug);
+  return `/parceiros/${repetido ? p.id : slug}`;
+}
+
+// Parceiro da conta pedida (id ou nome no endereço, ?conta=), já com a verificação de acesso.
 export async function contaDoPedido(u: UtilizadorParceiros, contaId: string | null) {
-  const id = contaId || u.parceiroId;
-  if (!id || !acessoConta(u, id)) return null;
-  return prisma.parceiro.findUnique({ where: { id } });
+  const pedido = contaId || u.parceiroId;
+  if (!pedido) return null;
+  let p = await prisma.parceiro.findUnique({ where: { id: pedido } });
+  if (!p) {
+    const iguais = (await prisma.parceiro.findMany()).filter((x) => slugParceiro(x.nome) === slugParceiro(pedido));
+    p = iguais.length === 1 ? iguais[0] : null;
+  }
+  if (!p || !acessoConta(u, p.id)) return null;
+  return p;
 }

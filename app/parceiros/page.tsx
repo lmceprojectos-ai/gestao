@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { utilizadorParceiros } from '@/lib/parceiros/acesso';
+import { utilizadorParceiros, linkParceiro } from '@/lib/parceiros/acesso';
+import { prisma } from '@/lib/db';
 import { migrarContaAntiga, listarContas } from '@/lib/parceiros/contas';
 import { ListaParceiros } from '@/components/parceiros/lista-parceiros';
 import { AppHeader } from '@/components/parceiros/app-header';
@@ -16,7 +17,11 @@ export default async function ParceirosPage() {
   if (!session?.user) redirect('/login?callbackUrl=/parceiros');
   const user = await utilizadorParceiros();
   if (!user) return <SemAcesso />;
-  if (!user.isAdmin) redirect(`/parceiros/${user.parceiroId}`);
+  if (!user.isAdmin) {
+    const todos = await prisma.parceiro.findMany({ select: { id: true, nome: true } });
+    const meu = todos.find((p) => p.id === user.parceiroId);
+    redirect(meu ? linkParceiro(meu, todos) : `/parceiros/${user.parceiroId}`);
+  }
   await migrarContaAntiga();
   const contas = await listarContas();
   return (

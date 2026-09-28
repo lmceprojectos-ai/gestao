@@ -29,3 +29,18 @@ export async function POST(request: Request) {
     : await prisma.parceiro.create({ data });
   return NextResponse.json(p);
 }
+
+// Eliminar um parceiro e a sua conta corrente (registos, ligações e documentos).
+// Só administradores e só parceiros inativos (desative primeiro, por segurança).
+export async function DELETE(request: Request) {
+  const user = await utilizadorParceiros();
+  if (!user?.isAdmin) return NextResponse.json({ message: 'Só administradores.' }, { status: 403 });
+  const id = new URL(request.url).searchParams.get('id');
+  const p = id ? await prisma.parceiro.findUnique({ where: { id }, include: { transacoes: { select: { attachments: { select: { cloudStoragePath: true } } } } } }) : null;
+  if (!p) return NextResponse.json({ message: 'Parceiro não encontrado.' }, { status: 404 });
+  if (p.ativo) return NextResponse.json({ message: 'Desative o parceiro antes de o eliminar.' }, { status: 400 });
+  const { deleteFile } = await import('@/lib/s3');
+  for (const a of p.transacoes.flatMap((t) => t.attachments)) { try { await deleteFile(a.cloudStoragePath); } catch {} }
+  await prisma.parceiro.delete({ where: { id: p.id } });
+  return NextResponse.json({ ok: true, registos: p.transacoes.length });
+}

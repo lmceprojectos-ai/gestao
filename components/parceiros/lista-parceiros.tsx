@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Pencil, Building2, Loader2, Users, ArrowRight } from 'lucide-react';
+import { Plus, Pencil, Building2, Loader2, Users, ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { formatSigned } from '@/lib/parceiros/format';
 import type { Totals } from '@/lib/parceiros/calc';
 
-type Conta = { id: string; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
+type Conta = { id: string; link: string; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
 
 const cls = (v: number) => (v > 0 ? 'val-pos' : v < 0 ? 'val-neg' : 'text-muted-foreground');
 
@@ -22,6 +22,17 @@ export function ListaParceiros({ contas }: { contas: Conta[] }) {
   const router = useRouter();
   const [editar, setEditar] = useState<Partial<Conta> | null>(null);
   const [aGuardar, setAGuardar] = useState(false);
+
+  const eliminar = async (c: Conta) => {
+    if (!confirm(`Eliminar o parceiro "${c.nome}" e os seus ${c.registos} registos?
+
+Esta ação é permanente e não pode ser desfeita.`)) return;
+    const r = await fetch(`/api/parceiros/contas?id=${c.id}`, { method: 'DELETE' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { toast.error(d?.message || 'Não foi possível eliminar'); return; }
+    toast.success(`Parceiro eliminado (${d.registos} registos)`);
+    router.refresh();
+  };
 
   const guardar = async () => {
     if (!editar?.nome?.trim()) { toast.error('Indique o nome do parceiro'); return; }
@@ -66,7 +77,10 @@ export function ListaParceiros({ contas }: { contas: Conta[] }) {
                     {c.registos} registos · <Users className="h-3 w-3" />{c.utilizadores} utilizador(es){c.emailAvisos ? ` · avisos: ${c.emailAvisos}` : ''}
                   </p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setEditar(c)} aria-label="Editar parceiro"><Pencil className="h-4 w-4" /></Button>
+                <div className="flex gap-1">
+                  {!c.ativo && <Button variant="ghost" size="icon" onClick={() => eliminar(c)} aria-label="Eliminar parceiro" title="Eliminar parceiro"><Trash2 className="h-4 w-4 text-destructive" /></Button>}
+                  <Button variant="ghost" size="icon" onClick={() => setEditar(c)} aria-label="Editar parceiro"><Pencil className="h-4 w-4" /></Button>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div><p className="text-xs text-muted-foreground">Faturado</p><p className={`font-mono font-semibold ${cls(c.totals.billed)}`}>{formatSigned(c.totals.billed)}</p></div>
@@ -76,7 +90,7 @@ export function ListaParceiros({ contas }: { contas: Conta[] }) {
               <p className="text-xs text-muted-foreground">
                 {c.totals.total > 0 ? `${c.nome} deve à Criaconsensos` : c.totals.total < 0 ? `A Criaconsensos deve a ${c.nome}` : 'Saldo liquidado'}
               </p>
-              <Button asChild className="w-full gap-1.5"><Link href={`/parceiros/${c.id}`}>Abrir conta corrente <ArrowRight className="h-4 w-4" /></Link></Button>
+              <Button asChild className="w-full gap-1.5"><Link href={c.link}>Abrir conta corrente <ArrowRight className="h-4 w-4" /></Link></Button>
             </div>
           ))}
         </div>
