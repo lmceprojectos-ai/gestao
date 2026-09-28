@@ -19,8 +19,7 @@ import {
   Wallet,
   Clock,
   SlidersHorizontal,
-  RotateCcw,
-} from 'lucide-react';
+  RotateCcw, Handshake } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
 import { EmptyState } from '@/components/empty-state';
@@ -42,6 +41,7 @@ interface AppUser {
   lastLogin: string | null;
   createdAt: string;
   isPontoUser?: boolean;
+  parceiroEmpresa?: string | null;
   pontoRole?: string | null;
   sendToAccounting?: boolean;
   partTime?: boolean;
@@ -77,6 +77,13 @@ const ROLES = [
     descricao: 'Só pode inserir e digitalizar documentos. Não edita nem apaga, e não vê os totais.',
     cor: 'bg-violet-100 text-violet-700',
     icon: FilePlus,
+  },
+  {
+    valor: 'parceiro',
+    label: 'Parceiro',
+    descricao: 'Só acede aos Parceiros (conta corrente). Ex.: a conta da Reclamarte. Não vê a Gestão.',
+    cor: 'bg-sky-100 text-sky-700',
+    icon: Handshake,
   },
   {
     valor: 'leitura',
@@ -123,9 +130,11 @@ interface FormState {
   email: string;
   password: string;
   role: string;
+  parceiroEmpresa: string;
 }
 
-const emptyForm: FormState = { name: '', email: '', password: '', role: 'leitura' };
+const emptyForm: FormState = { name: '', email: '', password: '', role: 'leitura', parceiroEmpresa: '' };
+const EMPRESA_LABEL: Record<string, string> = { CRIACONSENSOS: 'Criaconsensos', RECLAMARTE: 'Reclamarte' };
 
 export default function UtilizadoresPage() {
   const { data: session } = useSession() || {};
@@ -170,7 +179,7 @@ export default function UtilizadoresPage() {
 
   function openEdit(u: AppUser) {
     setEditing(u);
-    setForm({ name: u.name ?? '', email: u.email, password: '', role: u.role });
+    setForm({ name: u.name ?? '', email: u.email, password: '', role: u.role, parceiroEmpresa: u.parceiroEmpresa ?? '' });
     // Carregar permissões: base do perfil, sobreposta pelas personalizadas (se existirem).
     const base = roleBasePerms(u.role);
     if (u.permissions) {
@@ -188,7 +197,7 @@ export default function UtilizadoresPage() {
 
   // Ao mudar o perfil, repor as permissões para as predefinições desse perfil.
   function changeRole(newRole: string) {
-    setForm((f) => ({ ...f, role: newRole }));
+    setForm((f) => ({ ...f, role: newRole, parceiroEmpresa: newRole === 'parceiro' && !f.parceiroEmpresa ? 'RECLAMARTE' : f.parceiroEmpresa }));
     setPerms(roleBasePerms(newRole));
   }
 
@@ -225,6 +234,7 @@ export default function UtilizadoresPage() {
         name: form.name.trim(),
         email: form.email.trim(),
         role: form.role,
+        parceiroEmpresa: form.parceiroEmpresa || null,
       };
       if (form.password.trim()) payload.password = form.password.trim();
 
@@ -351,6 +361,11 @@ export default function UtilizadoresPage() {
                           <Icon className="h-3 w-3" />
                           {info.label}
                         </span>
+                        {u.parceiroEmpresa && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700">
+                            <Handshake className="h-3 w-3" />{EMPRESA_LABEL[u.parceiroEmpresa] ?? u.parceiroEmpresa}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDateTime(u.lastLogin)}</td>
                       <td className="px-4 py-3">
@@ -474,6 +489,21 @@ export default function UtilizadoresPage() {
                       ? roleInfo(form.role).descricao
                       : 'Conta criada no controlo de ponto. Por defeito não tem acesso às áreas financeiras — atribua um perfil acima ou defina permissões por área em baixo.'}
                   </p>
+                </div>
+
+                {/* Parceiros (conta corrente com a Reclamarte) */}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Acesso aos Parceiros</label>
+                  <select
+                    value={form.parceiroEmpresa}
+                    onChange={(e) => setForm((f) => ({ ...f, parceiroEmpresa: e.target.value }))}
+                    className="w-full px-3 py-2 border border-input rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none bg-background text-foreground"
+                  >
+                    {form.role !== 'parceiro' && <option value="">{form.role === 'admin' ? 'Criaconsensos (administrador)' : 'Sem acesso'}</option>}
+                    <option value="CRIACONSENSOS">Criaconsensos</option>
+                    <option value="RECLAMARTE">Reclamarte</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1.5">Empresa com que o utilizador regista na conta corrente. Cada empresa só altera os seus registos.</p>
                 </div>
 
                 {/* Permissões personalizadas por utilizador (apenas administradores) */}

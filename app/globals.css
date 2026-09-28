@@ -111,6 +111,39 @@
     --chart-5: 43 74% 66%;
   }
 
+  /* Parceiros (conta corrente): cores da app original, sempre em modo claro. */
+  .parceiros-theme,
+  .dark .parceiros-theme {
+    --background: 210 30% 98%;
+    --foreground: 213 40% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 213 40% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 40% 16%;
+    --primary: 212 52% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 30% 94%;
+    --secondary-foreground: 212 52% 25%;
+    --muted: 210 24% 95%;
+    --muted-foreground: 213 12% 42%;
+    --accent: 43 90% 55%;
+    --accent-foreground: 213 45% 18%;
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 213 20% 88%;
+    --input: 213 20% 86%;
+    --ring: 212 52% 25%;
+    color-scheme: light;
+  }
+  .parceiros-theme .row-debit { background-color: hsl(45 92% 93%); }
+  .parceiros-theme .row-debit:hover { background-color: hsl(45 92% 88%); }
+  .parceiros-theme .row-credit { background-color: hsl(140 42% 92%); }
+  .parceiros-theme .row-credit:hover { background-color: hsl(140 42% 87%); }
+  .parceiros-theme .row-payment { background-color: hsl(0 0% 100%); }
+  .parceiros-theme .row-payment:hover { background-color: hsl(210 30% 96%); }
+  .parceiros-theme .val-pos { color: hsl(142 55% 30%); }
+  .parceiros-theme .val-neg { color: hsl(0 72% 45%); }
+
   .dark .ponto-theme {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;

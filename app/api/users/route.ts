@@ -8,7 +8,8 @@ import bcrypt from 'bcryptjs';
 import { effectivePontoRole } from '@/lib/ponto/roles';
 import { sanitizePermissions } from '@/lib/permissions';
 
-const ROLES = ['admin', 'editor', 'insercao', 'leitura'];
+const ROLES = ['admin', 'editor', 'insercao', 'leitura', 'parceiro'];
+const EMPRESAS_PARCEIRAS = ['CRIACONSENSOS', 'RECLAMARTE'];
 
 export async function GET() {
   try {
@@ -26,6 +27,7 @@ export async function GET() {
         createdAt: true,
         isPontoUser: true,
         pontoRole: true,
+        parceiroEmpresa: true,
         sendToAccounting: true,
         partTime: true,
         permissions: true,
@@ -73,7 +75,11 @@ export async function POST(req: NextRequest) {
       ? sanitizePermissions((body as any)?.permissions)
       : null;
     const user = await prisma.user.create({
-      data: { name, email: String(email).toLowerCase().trim(), password: hashed, role: finalRole, permissions: permsToSave },
+      data: {
+        name, email: String(email).toLowerCase().trim(), password: hashed, role: finalRole, permissions: permsToSave,
+        // Parceiros: a conta "parceiro" tem de ter empresa (por defeito a Reclamarte).
+        parceiroEmpresa: EMPRESAS_PARCEIRAS.includes((body as any)?.parceiroEmpresa) ? (body as any).parceiroEmpresa : finalRole === 'parceiro' ? 'RECLAMARTE' : null,
+      },
       select: { id: true, name: true, email: true, role: true, lastLogin: true, createdAt: true },
     });
     return NextResponse.json(user, { status: 201 });

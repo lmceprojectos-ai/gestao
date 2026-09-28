@@ -7,7 +7,8 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { sanitizePermissions } from '@/lib/permissions';
 
-const ROLES = ['admin', 'editor', 'insercao', 'leitura'];
+const ROLES = ['admin', 'editor', 'insercao', 'leitura', 'parceiro'];
+const EMPRESAS_PARCEIRAS = ['CRIACONSENSOS', 'RECLAMARTE'];
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -36,6 +37,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = String(email).toLowerCase().trim();
     if (role !== undefined && ROLES.includes(role)) data.role = role;
+    // Parceiros: empresa parceira do utilizador (a conta "parceiro" fica sempre com uma).
+    if (body && 'parceiroEmpresa' in body) {
+      data.parceiroEmpresa = EMPRESAS_PARCEIRAS.includes(body.parceiroEmpresa) ? body.parceiroEmpresa : null;
+    }
+    if (data.role === 'parceiro' && !data.parceiroEmpresa) data.parceiroEmpresa = 'RECLAMARTE';
     if (password) {
       if (String(password).length < 6) return NextResponse.json({ error: 'A password deve ter pelo menos 6 caracteres' }, { status: 400 });
       data.password = await bcrypt.hash(password, 12);

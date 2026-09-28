@@ -202,6 +202,8 @@ function SidebarInner() {
   const role = (session?.user as any)?.role || '';
   const isAdmin = role === 'admin';
   const isEditor = role === 'editor';
+  // Parceiros (conta corrente com a Reclamarte): administradores e quem tem empresa parceira.
+  const verParceiros = isAdmin || !!(session?.user as any)?.parceiroEmpresa;
   const isInsercao = role === 'insercao';
   // Permissões por perfil (áreas visíveis). Vêm da sessão; em falta, usa os
   // valores por defeito para o perfil. O administrador vê sempre tudo.
@@ -383,6 +385,30 @@ function SidebarInner() {
           </span>
           <span className="truncate">Gestão de Ponto</span>
         </Link>
+
+        {/* Item destacado: Parceiros — conta corrente com a Reclamarte (como o Ponto) */}
+        {verParceiros && (
+          <Link
+            href="/parceiros"
+            onClick={() => setMobileOpen(false)}
+            className={cn(
+              'group flex items-center gap-3 rounded-xl px-3 py-3 font-semibold text-[14px] transition-all duration-150 shadow-sm border',
+              pathname?.startsWith('/parceiros')
+                ? 'bg-sky-400 text-[#0f2438] border-sky-300'
+                : 'bg-sky-500/15 text-white border-sky-400/40 hover:bg-sky-500/25'
+            )}
+          >
+            <span
+              className={cn(
+                'flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0',
+                pathname?.startsWith('/parceiros') ? 'bg-white/25' : 'bg-sky-400/25'
+              )}
+            >
+              <Handshake className={cn('h-5 w-5', pathname?.startsWith('/parceiros') ? 'text-[#0f2438]' : 'text-sky-300')} />
+            </span>
+            <span className="truncate">Parceiros</span>
+          </Link>
+        )}
 
         {/* Item destacado: Redes Sociais (apenas administradores e editores) */}
         {(isAdmin || isEditor) && (

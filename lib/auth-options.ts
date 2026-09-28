@@ -51,6 +51,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           pontoRole: (user as any).pontoRole ?? null,
+          parceiroEmpresa: (user as any).parceiroEmpresa ?? null,
         };
       },
     }),
@@ -64,6 +65,7 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.id = user.id;
         token.pontoRole = (user as any).pontoRole ?? null;
+        token.parceiroEmpresa = (user as any).parceiroEmpresa ?? null;
         token.perms = await loadPermsForUser(user.id, user.role);
         token.lastSync = Date.now();
         return token;
@@ -76,11 +78,12 @@ export const authOptions: NextAuthOptions = {
         try {
           const fresh = await prisma.user.findUnique({
             where: { id: token.id },
-            select: { role: true, pontoRole: true, name: true, permissions: true },
+            select: { role: true, pontoRole: true, name: true, permissions: true, parceiroEmpresa: true },
           });
           if (fresh) {
             token.role = fresh.role;
             token.pontoRole = (fresh as any).pontoRole ?? null;
+            token.parceiroEmpresa = (fresh as any).parceiroEmpresa ?? null;
             token.name = fresh.name;
             // Recarregar também as permissões personalizadas (podem ter sido
             // alteradas pelo administrador).
@@ -102,6 +105,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
         (session.user as any).pontoRole = token.pontoRole ?? null;
+        (session.user as any).parceiroEmpresa = token.parceiroEmpresa ?? null;
         (session.user as any).perms = token.perms ?? null;
       }
       return session;

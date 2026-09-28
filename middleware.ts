@@ -14,6 +14,14 @@ export default withAuth(
 
     const role = token.role || 'admin';
 
+    // Perfil exclusivo dos Parceiros (ex.: a conta da Reclamarte): só a conta corrente.
+    if (role === 'parceiro') {
+      const allowed = pathname.startsWith('/parceiros') || pathname.startsWith('/api/parceiros') || pathname.startsWith('/api/auth');
+      if (allowed) return NextResponse.next();
+      if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
+      return NextResponse.redirect(new URL('/parceiros', req.url));
+    }
+
     // Perfil efetivo no módulo de ponto (dá prioridade ao pontoRole dedicado).
     const effPonto = effectivePontoRole(token.pontoRole, role);
 
