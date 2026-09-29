@@ -32,11 +32,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { name, role, color } = body ?? {}
+    const email = (typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : null)
     if (!name) {
       return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
     }
     const collaborator = await prisma.conexusCollaborator.create({
-      data: { name, role: role ?? '', color: color || '#1e3a5f' },
+      data: { name, email, role: role ?? '', color: color || '#1e3a5f' },
     })
     const serialized = {
       ...collaborator,

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, forbiddenResponse, podeMexer } from '@/lib/conexus/session-helper'
 
 // POST - toggle daily task completion for a date
 export async function POST(request: NextRequest) {
@@ -16,6 +16,10 @@ export async function POST(request: NextRequest) {
     if (!dailyTaskId || !date) {
       return NextResponse.json({ error: 'dailyTaskId e date obrigatórios' }, { status: 400 })
     }
+
+    const tarefa = await prisma.conexusDailyTask.findUnique({ where: { id: dailyTaskId }, select: { collaboratorId: true } })
+    if (!tarefa) return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 })
+    if (!podeMexer(session, tarefa)) return forbiddenResponse()
 
     const dateObj = new Date(date)
 

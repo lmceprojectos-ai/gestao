@@ -2,9 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, isAdmin } from '@/lib/conexus/session-helper'
 
-// Traz os dados da app CONEXUS (Abacus): colaboradores, categorias, estados de
+// Só administradores. Traz os dados da app CONEXUS (Abacus): colaboradores, categorias, estados de
 // lembrete, tarefas diárias, assuntos e notas pessoais. Mantém os ids (para as
 // ligações ficarem certas) e não duplica: o que já existir com o mesmo id fica.
 // As notas pessoais ficam com o utilizador da Gestão que tiver o mesmo email.
@@ -13,7 +13,7 @@ const dia = (v: any) => new Date(`${String(v).slice(0, 10)}T00:00:00.000Z`)
 
 export async function POST(request: NextRequest) {
   const session = await getAuthSession()
-  if (!session) return unauthorizedResponse()
+  if (!session || !isAdmin(session)) return unauthorizedResponse()
   const b = await request.json().catch(() => null)
   if (!b) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
   const r: Record<string, number> = {}

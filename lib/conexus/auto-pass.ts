@@ -1,10 +1,18 @@
+import { createHash } from 'crypto'
 import { prisma } from '@/lib/db'
+
+// Id fixo da cópia de um assunto (sempre o mesmo para o mesmo original).
+const idCopia = (originalId: string) => 'ap' + createHash('sha1').update(originalId).digest('hex').slice(0, 23)
 
 /**
  * Passa automaticamente para `today` todos os assuntos pendentes de dias anteriores
  * (exceto tarefas diárias, que se regeneram automaticamente).
  * O original é marcado como `passado` e é criada uma cópia para hoje.
  * A regra é GLOBAL: aplica-se a TODOS os colaboradores, independentemente de quem a aciona.
+ *
+ * Várias páginas abertas ao mesmo tempo chamam isto em paralelo: só passa quem
+ * conseguir marcar o original (ainda pendente) e a cópia tem um id fixo
+ * (idCopia), para nunca haver duas cópias do mesmo assunto.
  */
 export async function autoPassOverdue(today: Date) {
   const overdue = await prisma.conexusSubject.findMany({
@@ -18,14 +26,17 @@ export async function autoPassOverdue(today: Date) {
 
   let count = 0
   for (const original of overdue) {
-    // Marcar o original como passado
-    await prisma.conexusSubject.update({
-      where: { id: original.id },
+    // Marcar o original como passado (só se ninguém o passou entretanto)
+    const marcado = await prisma.conexusSubject.updateMany({
+      where: { id: original.id, status: 'pendente' },
       data: { status: 'passado', passedReason: 'Adiado automaticamente' },
     })
+    if (marcado.count === 0) continue
     // Criar cópia para hoje
-    await prisma.conexusSubject.create({
+    await prisma.conexusSubject.createMany({
+      skipDuplicates: true,
       data: {
+        id: idCopia(original.id),
         title: original.title,
         description: original.description,
         client: original.client,

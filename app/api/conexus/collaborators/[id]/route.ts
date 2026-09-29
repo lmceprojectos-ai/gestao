@@ -15,6 +15,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const updateData: any = {}
     if (body?.name !== undefined) updateData.name = body.name
     if (body?.role !== undefined) updateData.role = body.role
+    // Email da conta da Gestão/Ponto que fica com acesso às tarefas deste colaborador
+    if (body?.email !== undefined) updateData.email = (typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : null)
     if (body?.color !== undefined) updateData.color = body.color
     if (body?.active !== undefined) updateData.active = body.active
 

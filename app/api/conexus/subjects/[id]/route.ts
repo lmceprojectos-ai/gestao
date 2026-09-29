@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, forbiddenResponse, isAdmin, podeMexer } from '@/lib/conexus/session-helper'
 import { sendTelegramMessage } from '@/lib/conexus/telegram'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -12,6 +12,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const id = params?.id
     if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 })
+    // Estado anterior (para detetar mudança para 'tratado') e dono do assunto
+    const previous = await prisma.conexusSubject.findUnique({ where: { id }, select: { status: true, collaboratorId: true } })
+    if (!previous) return NextResponse.json({ error: 'Assunto não encontrado' }, { status: 404 })
+    if (!podeMexer(session, previous)) return forbiddenResponse()
     const body = await request.json()
     const updateData: any = {}
     if (body?.title !== undefined) updateData.title = body.title
@@ -29,7 +33,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       updateData.reminderSent = false
     }
     if (body?.reminderStatus !== undefined) updateData.reminderStatus = body.reminderStatus
-    if (body?.collaboratorId !== undefined) updateData.collaboratorId = body.collaboratorId || null
+    if (body?.collaboratorId !== undefined && isAdmin(session)) updateData.collaboratorId = body.collaboratorId || null
     if (body?.scope !== undefined) updateData.scope = body.scope
     if (body?.urgent !== undefined) updateData.urgent = body.urgent
     if (body?.important !== undefined) updateData.important = body.important
@@ -37,8 +41,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (body?.date !== undefined) updateData.date = new Date(body.date)
     if (body?.reminderSent !== undefined) updateData.reminderSent = body.reminderSent
 
-    // Buscar o estado anterior para detetar mudança para 'tratado'
-    const previous = await prisma.conexusSubject.findUnique({ where: { id }, select: { status: true } })
 
     const subject = await prisma.conexusSubject.update({
       where: { id },
@@ -80,6 +82,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const id = params?.id
     if (!id) return NextResponse.json({ error: 'ID obrigatório' }, { status: 400 })
+    const existing = await prisma.conexusSubject.findUnique({ where: { id }, select: { collaboratorId: true } })
+    if (!existing) return NextResponse.json({ error: 'Assunto não encontrado' }, { status: 404 })
+    if (!podeMexer(session, existing)) return forbiddenResponse()
     await prisma.conexusSubject.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error: any) {

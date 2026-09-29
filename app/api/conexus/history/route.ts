@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse, getCollaboratorFilter } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, getCollaboratorFilter, isAdmin } from '@/lib/conexus/session-helper'
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     } else if (dateTo) {
       where.date = { lte: new Date(dateTo) }
     }
-    if (collaboratorId) {
+    if (collaboratorId && isAdmin(session)) {
       where.collaboratorId = collaboratorId
     }
 

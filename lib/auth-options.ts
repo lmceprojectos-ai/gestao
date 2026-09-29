@@ -5,6 +5,17 @@ import { prisma } from '@/lib/db';
 import { normalizeUserPerms, roleBasePerms } from '@/lib/permissions';
 
 // Lê as permissões PERSONALIZADAS de um utilizador (ou as do perfil, em falta).
+// Colaborador do Conexus ligado a esta conta (ficha do colaborador com o mesmo email).
+async function conexusColaborador(email?: string | null) {
+  if (!email) return null;
+  try {
+    const c = await prisma.conexusCollaborator.findFirst({ where: { email, active: true }, select: { id: true } });
+    return c?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadPermsForUser(userId?: string | null, role?: string | null) {
   try {
     if (!userId) return roleBasePerms(role);
@@ -66,6 +77,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.pontoRole = (user as any).pontoRole ?? null;
         token.parceiroId = (user as any).parceiroId ?? null;
+        token.collaboratorId = await conexusColaborador(user.email);
         token.perms = await loadPermsForUser(user.id, user.role);
         token.lastSync = Date.now();
         return token;
@@ -78,13 +90,14 @@ export const authOptions: NextAuthOptions = {
         try {
           const fresh = await prisma.user.findUnique({
             where: { id: token.id },
-            select: { role: true, pontoRole: true, name: true, permissions: true, parceiroId: true },
+            select: { role: true, pontoRole: true, name: true, email: true, permissions: true, parceiroId: true },
           });
           if (fresh) {
             token.role = fresh.role;
             token.pontoRole = (fresh as any).pontoRole ?? null;
             token.parceiroId = (fresh as any).parceiroId ?? null;
             token.name = fresh.name;
+            token.collaboratorId = await conexusColaborador(fresh.email);
             // Recarregar também as permissões personalizadas (podem ter sido
             // alteradas pelo administrador).
             let raw: any = null;
@@ -107,6 +120,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).pontoRole = token.pontoRole ?? null;
         (session.user as any).parceiroId = token.parceiroId ?? null;
         (session.user as any).perms = token.perms ?? null;
+        (session.user as any).collaboratorId = token.collaboratorId ?? null;
       }
       return session;
     },

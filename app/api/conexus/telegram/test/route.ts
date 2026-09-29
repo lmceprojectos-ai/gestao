@@ -2,11 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, isAdmin } from '@/lib/conexus/session-helper'
 
 export async function POST(request: NextRequest) {
   // Só administradores (na Gestão estas rotas não podem ficar abertas).
-  if (!(await getAuthSession())) return unauthorizedResponse()
+  if (!isAdmin(await getAuthSession())) return unauthorizedResponse()
   try {
     const body = await request.json()
     let { botToken, chatId } = body ?? {}

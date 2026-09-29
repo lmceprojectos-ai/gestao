@@ -206,6 +206,8 @@ function SidebarInner() {
   // Parceiros (conta corrente com a Reclamarte): administradores e quem tem empresa parceira.
   const verParceiros = isAdmin || !!(session?.user as any)?.parceiroId;
   const isInsercao = role === 'insercao';
+  // Conexus: administradores e contas ligadas a um colaborador do Conexus.
+  const verConexus = isAdmin || !!(session?.user as any)?.collaboratorId;
   // Permissões por perfil (áreas visíveis). Vêm da sessão; em falta, usa os
   // valores por defeito para o perfil. O administrador vê sempre tudo.
   const perms: RolePermissions | null = isAdmin
@@ -411,8 +413,8 @@ function SidebarInner() {
           </Link>
         )}
 
-        {/* Item destacado: Conexus — agenda de assuntos/tarefas (só administradores) */}
-        {isAdmin && (
+        {/* Item destacado: Conexus — agenda de assuntos/tarefas (administradores; colaboradores veem as suas) */}
+        {verConexus && (
           <Link
             href="/conexus"
             onClick={() => setMobileOpen(false)}

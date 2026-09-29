@@ -34,6 +34,7 @@ export function CollaboratorsClient() {
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [color, setColor] = useState('#06b6d4')
+  const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [showCredentials, setShowCredentials] = useState(false)
   const [credentialCollab, setCredentialCollab] = useState<CollaboratorType | null>(null)
@@ -63,11 +64,13 @@ export function CollaboratorsClient() {
       setName(collab?.name ?? '')
       setRole(collab?.role ?? '')
       setColor(collab?.color || '#1e3a5f')
+      setEmail(collab?.email ?? '')
     } else {
       setEditing(null)
       setName('')
       setRole('')
       setColor('#06b6d4')
+      setEmail('')
     }
     setShowForm(true)
   }
@@ -81,14 +84,14 @@ export function CollaboratorsClient() {
         await fetch(`/api/conexus/collaborators/${editing.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name?.trim(), role, color }),
+          body: JSON.stringify({ name: name?.trim(), role, color, email }),
         })
         toast.success('Colaborador atualizado')
       } else {
         await fetch('/api/conexus/collaborators', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name?.trim(), role, color }),
+          body: JSON.stringify({ name: name?.trim(), role, color, email }),
         })
         toast.success('Colaborador adicionado')
       }
@@ -187,6 +190,9 @@ export function CollaboratorsClient() {
                   <div>
                     <p className="font-semibold text-sm">{c?.name ?? ''}</p>
                     <p className="text-xs text-muted-foreground">{c?.role || 'Sem função definida'}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Mail className="h-3 w-3" /> {c?.email || 'Sem acesso (sem email)'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -270,6 +276,18 @@ export function CollaboratorsClient() {
                 placeholder="Ex: Técnico, Gestor"
                 className="mt-1"
               />
+            </div>
+            <div>
+              <Label htmlFor="collab-email">Email da conta (acesso às suas tarefas)</Label>
+              <Input
+                id="collab-email"
+                type="email"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e?.target?.value ?? '')}
+                placeholder="email com que entra na Gestão ou no Ponto"
+                className="mt-1"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Quem entrar com este email vê e trata só as tarefas deste colaborador.</p>
             </div>
             <div>
               <Label>Cor</Label>

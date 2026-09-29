@@ -5,6 +5,10 @@ import { prisma } from '@/lib/db'
 import { getAuthSession, unauthorizedResponse, getCollaboratorFilter } from '@/lib/conexus/session-helper'
 import { autoPassOverdue } from '@/lib/conexus/auto-pass'
 
+
+// Id fixo por tarefa diária e dia: pedidos em paralelo não criam duplicados.
+const idDiaria = (dailyTaskId: string, date: Date) => `dt_${dailyTaskId}_${date.toISOString().slice(0, 10)}`
+
 // Auto-gera assuntos a partir dos templates DailyTask para uma data
 async function ensureDailyTasks(date: Date) {
   const dailyTasks = await prisma.conexusDailyTask.findMany({
@@ -31,7 +35,9 @@ async function ensureDailyTasks(date: Date) {
 
   if (toCreate.length > 0) {
     await prisma.conexusSubject.createMany({
+      skipDuplicates: true,
       data: toCreate.map(dt => ({
+        id: idDiaria(dt.id, date),
         title: dt.title,
         description: dt.description || '',
         category: 'tarefas_diarias',

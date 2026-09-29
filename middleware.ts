@@ -36,7 +36,9 @@ export default withAuth(
         pathname.startsWith('/api/ponto') ||
         pathname.startsWith('/api/auth') ||
         pathname.startsWith('/api/perfil') ||
-        pathname.startsWith('/perfil');
+        pathname.startsWith('/perfil') ||
+        // Conexus: só as suas tarefas, se a conta estiver ligada a um colaborador.
+        (!!token.collaboratorId && (pathname.startsWith('/conexus') || pathname.startsWith('/api/conexus')));
       if (pathname.startsWith('/api/')) {
         if (!allowed) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
         return NextResponse.next();
@@ -47,8 +49,9 @@ export default withAuth(
 
     const isAdmin = role === 'admin';
 
-    // Conexus (agenda de assuntos): só administradores.
-    if (!isAdmin && (pathname.startsWith('/conexus') || pathname.startsWith('/api/conexus'))) {
+    // Conexus (agenda de assuntos): administradores e contas ligadas a um
+    // colaborador do Conexus (estas só veem as suas tarefas — ver as rotas).
+    if (!isAdmin && !token.collaboratorId && (pathname.startsWith('/conexus') || pathname.startsWith('/api/conexus'))) {
       if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
       return NextResponse.redirect(new URL('/', req.url));
     }

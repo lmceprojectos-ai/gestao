@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, forbiddenResponse, podeMexer } from '@/lib/conexus/session-helper'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     if (!original) {
       return NextResponse.json({ error: 'Assunto não encontrado' }, { status: 404 })
     }
+    if (!podeMexer(session, original)) return forbiddenResponse()
     // Mark original as passed
     await prisma.conexusSubject.update({
       where: { id: subjectId },

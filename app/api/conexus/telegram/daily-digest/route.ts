@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendTelegramMessage } from '@/lib/conexus/telegram'
 import { autoPassOverdue, autoPassPersonalNotes } from '@/lib/conexus/auto-pass'
-import { getAuthSession, unauthorizedResponse } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, isAdmin } from '@/lib/conexus/session-helper'
+
+// Id fixo por tarefa diária e dia: pedidos em paralelo não criam duplicados.
+const idDiaria = (dailyTaskId: string, date: Date) => `dt_${dailyTaskId}_${date.toISOString().slice(0, 10)}`
 
 // Garante que as tarefas diárias existem para a data indicada
 async function ensureDailyTasks(date: Date) {
@@ -18,7 +21,9 @@ async function ensureDailyTasks(date: Date) {
   const toCreate = dailyTasks.filter(dt => !existingKeys.has(`${dt.title}||${dt.collaboratorId}`))
   if (toCreate.length > 0) {
     await prisma.conexusSubject.createMany({
+      skipDuplicates: true,
       data: toCreate.map(dt => ({
+        id: idDiaria(dt.id, date),
         title: dt.title,
         description: dt.description || '',
         category: 'tarefas_diarias',
@@ -35,7 +40,7 @@ async function ensureDailyTasks(date: Date) {
 
 export async function POST() {
   // Só administradores (na Gestão estas rotas não podem ficar abertas).
-  if (!(await getAuthSession())) return unauthorizedResponse()
+  if (!isAdmin(await getAuthSession())) return unauthorizedResponse()
   try {
     const settings = await prisma.conexusSettings.findUnique({ where: { id: 'default' } })
     if (!settings?.telegramBotToken || !settings?.telegramChatId) {

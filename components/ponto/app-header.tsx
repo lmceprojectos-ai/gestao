@@ -4,7 +4,7 @@ import { useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut, ShieldCheck, User, KeyRound, Loader2, ArrowLeft } from "lucide-react";
+import { LogOut, ShieldCheck, User, KeyRound, Loader2, ArrowLeft, ClipboardCheck } from "lucide-react";
 import { hasGestaoAccess } from "@/lib/ponto/roles";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ponto/theme-toggle";
@@ -37,6 +37,8 @@ export function AppHeader({
   }
   const { data: session } = useSession() || {};
   const canManage = hasGestaoAccess((session?.user as any)?.role ?? role);
+  // Conexus (as suas tarefas): contas ligadas a um colaborador do Conexus.
+  const verConexus = !canManage && !!(session?.user as any)?.collaboratorId;
   const [sending, setSending] = useState(false);
 
   async function requestPasswordChange() {
@@ -109,6 +111,13 @@ export function AppHeader({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {verConexus && (
+            <Button size="sm" title="Conexus — as minhas tarefas" onClick={() => router.push("/conexus")} className="bg-orange-500 hover:bg-orange-600 text-white">
+              <ClipboardCheck className="h-4 w-4" />
+              <span>Conexus</span>
+            </Button>
+          )}
 
           {canManage && (
             <Button variant="outline" size="sm" title="Voltar à Gestão" onClick={() => router.push("/")}>
