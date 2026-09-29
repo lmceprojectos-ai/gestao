@@ -23,7 +23,16 @@ export async function sendTelegramMessage(text: string): Promise<boolean> {
         }),
       }
     )
-    const result = await response.json()
+    let result = await response.json()
+    // Títulos com _ * [ ` partem o Markdown do Telegram: reenviar sem formatação.
+    if (!result?.ok && /parse entities/i.test(String(result?.description ?? ''))) {
+      const simples = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: settings.telegramChatId, text: text.replace(/\*/g, '') }),
+      })
+      result = await simples.json()
+    }
     if (!result?.ok) {
       console.error('Telegram sendMessage falhou:', result?.description)
     }
