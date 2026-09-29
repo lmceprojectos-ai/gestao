@@ -1145,3 +1145,136 @@ model ParceiroAlocacao {
   @@index([paymentId])
   @@index([workId])
 }
+
+// ---- Conexus: agenda de assuntos/tarefas (trazida da app CONEXUS / Painel de Despacho da Abacus) ----
+// Só para administradores da Gestão.
+model ConexusCategory {
+  id                 String   @id @default(cuid())
+  value              String   @unique @db.VarChar(100)
+  label              String   @db.VarChar(191)
+  icon               String   @default("📌") @db.VarChar(20)
+  color              String   @default("bg-slate-500") @db.VarChar(60)
+  sortOrder          Int      @default(0)
+  active             Boolean  @default(true)
+  visibleOnDashboard Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ConexusReminderStatus {
+  id        String   @id @default(cuid())
+  value     String   @unique @db.VarChar(100)
+  label     String   @db.VarChar(191)
+  icon      String   @default("⚪") @db.VarChar(20)
+  color     String   @default("text-slate-400") @db.VarChar(60)
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConexusCollaborator {
+  id         String             @id @default(cuid())
+  name       String             @db.VarChar(191)
+  email      String?            @db.VarChar(191)
+  role       String             @default("") @db.VarChar(191)
+  color      String             @default("#1e3a5f") @db.VarChar(20)
+  active     Boolean            @default(true)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  subjects   ConexusSubject[]
+  dailyTasks ConexusDailyTask[]
+}
+
+model ConexusSubject {
+  id             String               @id @default(cuid())
+  title          String               @db.VarChar(500)
+  description    String               @default("") @db.VarChar(5000)
+  client         String               @default("") @db.VarChar(191)
+  contactType    String               @default("interno") @db.VarChar(40)
+  workType       String               @default("") @db.VarChar(191)
+  deadline       DateTime?
+  priority       String               @default("media") @db.VarChar(20)
+  category       String               @default("geral") @db.VarChar(100)
+  status         String               @default("pendente") @db.VarChar(20)
+  date           DateTime             @db.Date
+  reminderTime   String?              @db.VarChar(10)
+  reminderDate   DateTime?
+  reminderStatus String               @default("nao_definido") @db.VarChar(100)
+  reminderSent   Boolean              @default(false)
+  scope          String               @default("profissional") @db.VarChar(40)
+  urgent         Boolean              @default(false)
+  important      Boolean              @default(false)
+  passedReason   String?              @db.VarChar(1000)
+  passedFromId   String?
+  collaboratorId String?
+  collaborator   ConexusCollaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@index([category])
+  @@index([collaboratorId])
+}
+
+// Notas privadas de cada administrador (userId = utilizador da Gestão).
+model ConexusPersonalNote {
+  id        String   @id @default(cuid())
+  userId    String?
+  title     String   @db.VarChar(500)
+  content   String   @default("") @db.VarChar(5000)
+  date      DateTime @db.Date
+  time      String?  @db.VarChar(10)
+  priority  String   @default("media") @db.VarChar(20)
+  done      Boolean  @default(false)
+  source    String   @default("text") @db.VarChar(20)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([userId])
+}
+
+model ConexusSettings {
+  id               String   @id @default("default")
+  telegramBotToken String   @default("") @db.VarChar(191)
+  telegramChatId   String   @default("") @db.VarChar(100)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ConexusReminderLog {
+  id        String   @id @default(cuid())
+  subjectId String
+  sentAt    DateTime @default(now())
+  success   Boolean  @default(true)
+  error     String?  @db.Text
+}
+
+model ConexusDailyTask {
+  id             String                       @id @default(cuid())
+  title          String                       @db.VarChar(500)
+  description    String                       @default("") @db.VarChar(2000)
+  collaboratorId String
+  collaborator   ConexusCollaborator          @relation(fields: [collaboratorId], references: [id], onDelete: Cascade)
+  sortOrder      Int                          @default(0)
+  active         Boolean                      @default(true)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  completions    ConexusDailyTaskCompletion[]
+
+  @@index([collaboratorId])
+}
+
+model ConexusDailyTaskCompletion {
+  id          String           @id @default(cuid())
+  dailyTaskId String
+  dailyTask   ConexusDailyTask @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  date        DateTime         @db.Date
+  completedAt DateTime         @default(now())
+  note        String           @default("") @db.VarChar(1000)
+
+  @@unique([dailyTaskId, date])
+  @@index([date])
+}

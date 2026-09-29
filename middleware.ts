@@ -46,6 +46,12 @@ export default withAuth(
     }
 
     const isAdmin = role === 'admin';
+
+    // Conexus (agenda de assuntos): só administradores.
+    if (!isAdmin && (pathname.startsWith('/conexus') || pathname.startsWith('/api/conexus'))) {
+      if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
+      return NextResponse.redirect(new URL('/', req.url));
+    }
     // Permissões do utilizador (personalizadas pelo administrador ou as do
     // perfil). Guardadas no token; se ausentes (sessões antigas), usar os
     // valores por defeito do perfil, que reproduzem o comportamento base.

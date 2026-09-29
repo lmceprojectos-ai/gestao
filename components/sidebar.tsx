@@ -6,6 +6,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
+  ClipboardCheck,
   Scale,
   DatabaseBackup,
   Landmark,
@@ -407,6 +408,30 @@ function SidebarInner() {
               <Handshake className={cn('h-5 w-5', pathname?.startsWith('/parceiros') ? 'text-[#0f2438]' : 'text-sky-300')} />
             </span>
             <span className="truncate">Parceiros</span>
+          </Link>
+        )}
+
+        {/* Item destacado: Conexus — agenda de assuntos/tarefas (só administradores) */}
+        {isAdmin && (
+          <Link
+            href="/conexus"
+            onClick={() => setMobileOpen(false)}
+            className={cn(
+              'group flex items-center gap-3 rounded-xl px-3 py-3 font-semibold text-[14px] transition-all duration-150 shadow-sm border',
+              pathname?.startsWith('/conexus')
+                ? 'bg-orange-400 text-[#0f2438] border-orange-300'
+                : 'bg-orange-500/15 text-white border-orange-400/40 hover:bg-orange-500/25'
+            )}
+          >
+            <span
+              className={cn(
+                'flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0',
+                pathname?.startsWith('/conexus') ? 'bg-white/25' : 'bg-orange-400/25'
+              )}
+            >
+              <ClipboardCheck className={cn('h-5 w-5', pathname?.startsWith('/conexus') ? 'text-[#0f2438]' : 'text-orange-300')} />
+            </span>
+            <span className="truncate">Conexus</span>
           </Link>
         )}
 
