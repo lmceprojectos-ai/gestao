@@ -125,6 +125,6 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    '/((?!login|signup|convite|forgot-password|reset-password|api/auth|api/local-storage|_next/static|_next/image|favicon|apple-icon|icon-criaconsensos|og-image\.png|logo-criaconsensos).*)',
+    '/((?!login|signup|convite|forgot-password|reset-password|api/auth|api/local-storage|_next/static|_next/image|favicon|apple-icon|manifests/|icones/|icon-criaconsensos|og-image\.png|logo-criaconsensos).*)',
   ],
 };

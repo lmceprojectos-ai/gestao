@@ -4,7 +4,10 @@ import { conviteValido } from '@/lib/parceiros/convite';
 import { EntradaParceiro } from '@/components/parceiros/entrada-parceiro';
 import { TemaParceiros } from '@/components/parceiros/tema';
 
+import { metadataApp } from '@/lib/app-icone';
+
 export const dynamic = 'force-dynamic';
+export const metadata = metadataApp('parceiros', 'Parceiros');
 
 // Página pública do link de convite de um parceiro: entrar, criar conta ou repor
 // a palavra-passe, e seguir para a conta corrente da empresa.

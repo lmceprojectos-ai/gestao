@@ -51,7 +51,7 @@ export function LedgerFilters({
             <Input
               value={filters.search}
               onChange={(e) => set({ search: e.target.value })}
-              placeholder="Descrição ou referência"
+              placeholder="Descrição ou n.º da fatura/orçamento"
               className="pl-10 h-9"
             />
           </div>

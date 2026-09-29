@@ -1,4 +1,7 @@
 import { ReactNode } from "react";
+import { metadataApp } from "@/lib/app-icone";
+
+export const metadata = metadataApp("ponto", "Ponto");
 
 // Aplica o tema próprio (amarelo original) do módulo Gestão de Ponto,
 // com escopo apenas às páginas /ponto — sem afetar o resto da aplicação.

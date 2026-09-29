@@ -1,0 +1,15 @@
+{
+  "id": "/redes-sociais",
+  "name": "Redes Sociais — Criaconsensos",
+  "short_name": "Redes Sociais",
+  "start_url": "/redes-sociais",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#facc15",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "/icones/redes-sociais-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icones/redes-sociais-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
