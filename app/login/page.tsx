@@ -124,12 +124,6 @@ export default function LoginPage() {
               Esqueci-me da palavra-passe
             </Link>
           </p>
-          <p className="mt-4 text-center text-sm text-gray-500">
-            Não tem conta?{' '}
-            <Link href="/signup" className="text-[#0d9488] font-medium hover:underline">
-              Criar conta
-            </Link>
-          </p>
         </div>
       </div>
     </div>

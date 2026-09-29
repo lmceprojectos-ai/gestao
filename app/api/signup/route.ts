@@ -1,52 +1,10 @@
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { prisma } from '@/lib/db';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password, name } = body ?? {};
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email e password são obrigatórios' },
-        { status: 400 }
-      );
-    }
-
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'Este email já está registado' },
-        { status: 409 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name: name ?? 'Utilizador',
-        role: 'admin',
-      },
-    });
-
-    return NextResponse.json(
-      { message: 'Conta criada com sucesso', userId: user.id },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    console.error('Erro no registo:', error);
-    return NextResponse.json(
-      { error: 'Erro interno do servidor' },
-      { status: 500 }
-    );
-  }
+// O registo público está desativado: criava contas de administrador para
+// qualquer pessoa. As contas criam-se em Gestão → Utilizadores, ou pelos
+// parceiros através do link de convite (/convite/<parceiro>).
+export async function POST() {
+  return NextResponse.json({ error: 'O registo de contas está desativado. Peça acesso a um administrador.' }, { status: 403 });
 }

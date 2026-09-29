@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Pencil, Building2, Loader2, Users, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Building2, Loader2, Users, ArrowRight, Trash2, Link2, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { formatSigned } from '@/lib/parceiros/format';
 import type { Totals } from '@/lib/parceiros/calc';
 
-type Conta = { id: string; link: string; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
+type Conta = { id: string; link: string; convite: string | null; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
 
 const cls = (v: number) => (v > 0 ? 'val-pos' : v < 0 ? 'val-neg' : 'text-muted-foreground');
 
@@ -22,6 +22,15 @@ export function ListaParceiros({ contas }: { contas: Conta[] }) {
   const router = useRouter();
   const [editar, setEditar] = useState<Partial<Conta> | null>(null);
   const [aGuardar, setAGuardar] = useState(false);
+
+  const copiar = async (c: Conta) => {
+    try { await navigator.clipboard.writeText(c.convite!); toast.success('Link copiado'); }
+    catch { window.prompt('Copie o link:', c.convite!); }
+  };
+  const whatsapp = (c: Conta) => {
+    const texto = `Olá! Este é o link de acesso à conta corrente entre a ${c.nome} e a Criaconsensos. Pode entrar, criar conta ou repor a palavra-passe aqui: ${c.convite}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+  };
 
   const eliminar = async (c: Conta) => {
     if (!confirm(`Eliminar o parceiro "${c.nome}" e os seus ${c.registos} registos?
@@ -90,6 +99,16 @@ Esta ação é permanente e não pode ser desfeita.`)) return;
               <p className="text-xs text-muted-foreground">
                 {c.totals.total > 0 ? `${c.nome} deve à Criaconsensos` : c.totals.total < 0 ? `A Criaconsensos deve a ${c.nome}` : 'Saldo liquidado'}
               </p>
+              {c.convite && (
+                <div className="rounded-lg bg-secondary/60 p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">Link de acesso para enviar ao parceiro (entrar, criar conta ou repor a palavra-passe):</p>
+                  <p className="text-xs font-mono break-all">{c.convite}</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="gap-1.5 flex-1" onClick={() => copiar(c)}><Link2 className="h-4 w-4" /> Copiar link</Button>
+                    <Button variant="outline" size="sm" className="gap-1.5 flex-1" onClick={() => whatsapp(c)}><MessageCircle className="h-4 w-4" /> WhatsApp</Button>
+                  </div>
+                </div>
+              )}
               <Button asChild className="w-full gap-1.5"><Link href={c.link}>Abrir conta corrente <ArrowRight className="h-4 w-4" /></Link></Button>
             </div>
           ))}

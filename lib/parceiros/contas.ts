@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { enrich } from '@/lib/parceiros/calc';
 import { getAllDTO } from '@/lib/parceiros/server-tx';
 import { linkParceiro } from '@/lib/parceiros/acesso';
+import { linkConvite } from '@/lib/parceiros/convite';
 
 // Antes havia uma só conta (Criaconsensos ↔ Reclamarte): os registos sem parceiro
 // e os utilizadores com a empresa antiga passam para o parceiro "Reclamarte".
@@ -27,6 +28,7 @@ export async function listarContas() {
       id: p.id,
       nome: p.nome,
       link: linkParceiro(p, parceiros),
+      convite: p.ativo ? linkConvite(p) : null,
       emailAvisos: p.emailAvisos,
       ativo: p.ativo,
       registos: p._count.transacoes,
