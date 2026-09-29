@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
@@ -10,6 +10,11 @@ import Image from 'next/image';
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  // Depois de repor a palavra-passe chega-se aqui com o email já preenchido (?email=).
+  useEffect(() => {
+    const e = new URLSearchParams(window.location.search).get('email');
+    if (e) setEmail(e);
+  }, []);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);

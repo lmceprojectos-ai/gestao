@@ -45,7 +45,7 @@ function ResetPasswordInner() {
         setError(data?.error || 'Ocorreu um erro. Tente novamente.');
       } else {
         setDone(true);
-        setTimeout(() => router.replace('/login'), 2500);
+        setTimeout(() => { window.location.href = data?.entrar || '/login'; }, 2000);
       }
     } catch (err) {
       setError('Ocorreu um erro. Tente novamente.');
