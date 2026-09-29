@@ -1,5 +1,4 @@
-// Armazenamento de ficheiros. Mantém a interface original (antes S3 da Abacus),
-// mas grava no disco do servidor — ver lib/local-storage.ts.
+// Armazenamento de ficheiros: grava no disco do servidor — ver lib/local-storage.ts.
 import {
   appBaseUrl,
   deleteLocalFile,

@@ -16,7 +16,7 @@ import { formatCurrency, formatDate } from '@/lib/format';
 const GraficoTrimestres = dynamic(() => import('./graficos').then((m) => m.GraficoTrimestres), { ssr: false, loading: () => <div className="h-[300px] bg-muted rounded-lg animate-pulse" /> });
 const GraficoCategorias = dynamic(() => import('./graficos').then((m) => m.GraficoCategorias), { ssr: false, loading: () => <div className="h-[300px] bg-muted rounded-lg animate-pulse" /> });
 
-// Balancete (trazido de balancete2026.abacusai.app): dashboard, movimentos,
+// Balancete: dashboard, movimentos,
 // contas e relatórios. O que entra aparece a verde e o que sai a vermelho.
 
 type Conta = { id: string; nome: string; saldo: number; saldoAbertura: number; dataAbertura: string | null; receitas: number; despesas: number; entrada: number; saida: number; saldoDoAno: number; movimentos: number };

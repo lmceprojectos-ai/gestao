@@ -1,4 +1,4 @@
-// Envio de emails pelo servidor SMTP próprio (substitui as notificações da Abacus).
+// Envio de emails pelo servidor SMTP próprio.
 import nodemailer from 'nodemailer';
 
 let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;

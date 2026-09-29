@@ -1,10 +1,12 @@
 // Geração do registo de assiduidade mensal em PDF (para a contabilidade).
 // Mostra, dia a dia, as marcações de ponto de cada colaborador — incluindo
 // a hora de saída/regresso do almoço — bem como férias, faltas e feriados.
-// Reutiliza a conversão HTML→PDF e a assinatura de tokens do módulo do recibo.
+// O PDF é desenhado no próprio servidor (lib/pdf/folha); reutiliza a assinatura
+// de tokens do módulo do recibo.
 
 import { prisma } from "@/lib/db";
-import { COMPANY, renderPayslipPdf, signPayslipToken } from "@/lib/ponto/payslip-pdf";
+import { COMPANY, signPayslipToken } from "@/lib/ponto/payslip-pdf";
+import { Folha } from "@/lib/pdf/folha";
 import { workedMinutesForDay, formatMinutes } from "@/lib/ponto/schedule";
 import {
   isHoliday,
@@ -22,10 +24,6 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 const DOW = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-function esc(s: string): string {
-  return (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 // Hora HH:MM no fuso de Lisboa
 function hhmm(d: Date): string {
@@ -55,8 +53,8 @@ type DayRow = {
   comprovativoUrl?: string; // link para o anexo/comprovativo (falta justificada)
 };
 
-// ── Construção do HTML do registo de assiduidade ──────────────────────────
-export function buildAttendanceHtml(opts: {
+// ── Desenho do registo de assiduidade (PDF A4) ────────────────────────────
+export async function desenharAssiduidade(opts: {
   name: string;
   employeeNumber?: string | null;
   category?: string | null;
@@ -70,9 +68,9 @@ export function buildAttendanceHtml(opts: {
     amount: number;
     reasons: string[];
   };
-}): string {
+}): Promise<Buffer> {
   const [yStr, mStr] = opts.month.split("-");
-  const y = parseInt(yStr, 10);
+  const y0 = parseInt(yStr, 10);
   const m = parseInt(mStr, 10);
   const monthName = m >= 1 && m <= 12 ? MESES[m - 1] : opts.month;
 
@@ -81,157 +79,99 @@ export function buildAttendanceHtml(opts: {
   // almoço registada (dia completo), incluímos também as colunas de almoço para
   // que esses dias mostrem a saída e o regresso do almoço. Caso contrário, usa-se
   // o formato compacto (apenas Entrada e Saída).
-  const partTimeHasLunch =
-    partTime && opts.rows.some((r) => r.saidaAlmoco || r.regressoAlmoco);
+  const partTimeHasLunch = partTime && opts.rows.some((r) => r.saidaAlmoco || r.regressoAlmoco);
   const partTimeCompact = partTime && !partTimeHasLunch;
-  const bodyRows = opts.rows
-    .map((r) => {
-      const weekend = r.dow === 0 || r.dow === 6;
-      const shade = weekend || (!r.worked && r.obs) ? "background:#f3f4f6;" : "";
-      const obsColor = /Falta injustificada/i.test(r.obs)
-        ? "color:#b91c1c;font-weight:bold;"
-        : /Férias|Feriado|Ponte|Falta/i.test(r.obs)
-        ? "color:#1d4ed8;"
-        : "";
-      const obsCell = `<td class="o" style="${obsColor}">${esc(r.obs)}${
-        r.comprovativoUrl
-          ? `<br><a href="${r.comprovativoUrl}" style="color:#b45309;font-weight:600;text-decoration:underline;">Ver comprovativo</a>`
-          : ""
-      }</td>`;
-      if (partTimeCompact) {
-        return `<tr style="${shade}">
-        <td class="d">${pad(r.day)} ${DOW[r.dow]}</td>
-        <td class="h">${r.entrada || "—"}</td>
-        <td class="h">${r.saida || "—"}</td>
-        <td class="h">${r.horas || ""}</td>
-        ${obsCell}
-      </tr>`;
-      }
-      if (partTimeHasLunch) {
-        return `<tr style="${shade}">
-        <td class="d">${pad(r.day)} ${DOW[r.dow]}</td>
-        <td class="h">${r.entrada || "—"}</td>
-        <td class="h">${r.saidaAlmoco || "—"}</td>
-        <td class="h">${r.regressoAlmoco || "—"}</td>
-        <td class="h">${r.saida || "—"}</td>
-        <td class="h">${r.horas || ""}</td>
-        ${obsCell}
-      </tr>`;
-      }
-      return `<tr style="${shade}">
-        <td class="d">${pad(r.day)} ${DOW[r.dow]}</td>
-        <td class="h">${r.entrada || "—"}</td>
-        <td class="h">${r.saidaAlmoco || "—"}</td>
-        <td class="h">${r.regressoAlmoco || "—"}</td>
-        <td class="h">${r.saidaFinal || "—"}</td>
-        <td class="h">${r.horas || ""}</td>
-        ${obsCell}
-      </tr>`;
-    })
-    .join("\n");
 
-  return `<!DOCTYPE html>
-<html lang="pt"><head><meta charset="utf-8"><style>
-  * { box-sizing: border-box; }
-  html, body { margin:0; padding:0; }
-  body { font-family: Arial, Helvetica, sans-serif; color:#111827; font-size:12px; }
-  .wrap { padding: 6px 16px; }
-  .head { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:3px solid #feca00; padding-bottom:8px; margin-bottom:10px; }
-  .company { font-size:17px; font-weight:bold; }
-  .company .sub { font-size:11px; font-weight:normal; color:#6b7280; }
-  .title { text-align:right; font-size:13px; font-weight:bold; }
-  .title .mono { font-size:11px; font-weight:normal; color:#6b7280; }
-  .emp { margin:6px 0 12px; font-size:12px; }
-  .emp strong { font-size:13px; }
-  table.grid { border-collapse:collapse; width:100%; }
-  table.grid th { background:#feca00; color:#1f2937; font-size:11px; padding:6px 6px; border:1px solid #e5b800; text-align:center; }
-  table.grid td { border:1px solid #e5e7eb; padding:4px 6px; font-size:11px; }
-  table.grid td.d { text-align:left; white-space:nowrap; }
-  table.grid td.h { text-align:center; }
-  table.grid td.o { text-align:left; color:#374151; }
-  .tots { margin-top:12px; width:100%; border-collapse:collapse; }
-  .tots td { padding:6px 10px; font-size:12px; border:1px solid #e5e7eb; }
-  .tots .lbl { color:#6b7280; }
-  .tots .val { font-weight:bold; text-align:right; }
-  .foot { margin-top:14px; color:#9ca3af; font-size:10px; }
-</style></head>
-<body><div class="wrap">
+  const f = await Folha.criar("helvetica", 28);
+  const x = f.margem;
+  const W = f.largura;
 
-  <div class="head">
-    <div class="company">${esc(COMPANY.name)}<div class="sub">NIF ${esc(COMPANY.nif)} · Livro de Ponto</div></div>
-    <div class="title">REGISTO DE ASSIDUIDADE<div class="mono">${monthName} de ${y}</div></div>
-  </div>
+  const pesos = partTimeCompact ? [16, 17, 17, 14, 36] : [13, 13, 14, 15, 13, 12, 20];
+  const titulos = partTimeCompact
+    ? ["Dia", "Entrada", "Saída", "Horas", "Observações"]
+    : ["Dia", "Entrada", "Saída almoço", "Regresso almoço", partTimeHasLunch ? "Saída" : "Saída final", "Horas", "Observações"];
+  const cols = pesos.map((p, i) => ({ w: (W * p) / 100, align: (i === 0 || i === pesos.length - 1 ? "left" : "center") as "left" | "center" }));
 
-  <div class="emp">
-    ${opts.employeeNumber ? `<span style="color:#6b7280;margin-right:10px;">N.º ${esc(opts.employeeNumber)}</span>` : ""}
-    <strong>${esc(opts.name)}</strong>${opts.category ? ` — ${esc(opts.category)}` : ""}
-  </div>
+  let y = 24;
+  const cabecalho = () => {
+    f.texto(COMPANY.name, x, y, { size: 15, bold: true });
+    f.texto(`NIF ${COMPANY.nif} · Livro de Ponto`, x, y + 19, { size: 9.5, color: "#6b7280" });
+    f.texto("REGISTO DE ASSIDUIDADE", x, y + 2, { size: 12, bold: true, align: "right", width: W });
+    f.texto(`${monthName} de ${y0}`, x, y + 19, { size: 9.5, color: "#6b7280", align: "right", width: W });
+    y += 34;
+    f.linha(x, y, x + W, y, { color: "#feca00", width: 3 });
+    y += 10;
+  };
+  const cabecalhoTabela = () => {
+    y += f.linhaTabela(x, y, cols.map((c) => ({ ...c, align: "center" as const })), titulos.map((t) => ({ t })), {
+      size: 9, pad: 5, bold: true, fill: "#feca00", border: "#e5b800", color: "#1f2937",
+    });
+  };
 
-  <table class="grid">
-    <thead>
-      <tr>
-      ${
-        partTimeCompact
-          ? `<th style="width:16%;">Dia</th>
-        <th style="width:17%;">Entrada</th>
-        <th style="width:17%;">Saída</th>
-        <th style="width:14%;">Horas</th>
-        <th style="width:36%;">Observações</th>`
-          : partTimeHasLunch
-          ? `<th style="width:13%;">Dia</th>
-        <th style="width:13%;">Entrada</th>
-        <th style="width:14%;">Saída almoço</th>
-        <th style="width:15%;">Regresso almoço</th>
-        <th style="width:13%;">Saída</th>
-        <th style="width:12%;">Horas</th>
-        <th style="width:20%;">Observações</th>`
-          : `<th style="width:13%;">Dia</th>
-        <th style="width:13%;">Entrada</th>
-        <th style="width:14%;">Saída almoço</th>
-        <th style="width:15%;">Regresso almoço</th>
-        <th style="width:13%;">Saída final</th>
-        <th style="width:12%;">Horas</th>
-        <th style="width:20%;">Observações</th>`
-      }
-      </tr>
-    </thead>
-    <tbody>${bodyRows}</tbody>
-  </table>
+  cabecalho();
+  // Colaborador
+  let xe = x;
+  if (opts.employeeNumber) {
+    const t = `N.º ${opts.employeeNumber}`;
+    f.texto(t, x, y, { size: 10, color: "#6b7280" });
+    xe += f.medir(t, 10) + 10;
+  }
+  f.texto(opts.name, xe, y, { size: 11, bold: true });
+  if (opts.category) f.texto(` — ${opts.category}`, xe + f.medir(opts.name, 11, true), y + 1, { size: 10 });
+  y += 22;
+  cabecalhoTabela();
 
-  <table class="tots">
-    <tr>
-      <td class="lbl">Dias trabalhados</td><td class="val">${opts.totals.diasTrabalhados}</td>
-      <td class="lbl">Total de horas</td><td class="val">${formatMinutes(opts.totals.totalMin)}</td>
-      <td class="lbl">Dias de férias</td><td class="val">${opts.totals.ferias}</td>
-      <td class="lbl">Faltas</td><td class="val">${opts.totals.faltas}</td>
-    </tr>
-  </table>
-
-  ${
-    opts.bonus && opts.bonus.effective
-      ? `<table class="tots" style="margin-top:8px;">
-    <tr>
-      <td class="lbl" style="width:34%;">Prémio de assiduidade e pontualidade</td>
-      <td style="font-weight:bold;${opts.bonus.qualified ? "color:#15803d;" : "color:#b91c1c;"}">${
-          opts.bonus.qualified
-            ? `QUALIFICADO — ${eur(opts.bonus.amount)}`
-            : "NÃO QUALIFICADO"
-        }</td>
-    </tr>${
-      !opts.bonus.qualified && opts.bonus.reasons.length
-        ? `
-    <tr><td class="lbl" style="vertical-align:top;">Motivo(s)</td><td style="color:#6b7280;">${opts.bonus.reasons
-            .map((r) => esc(r))
-            .join("<br>")}</td></tr>`
-        : ""
+  const fundoPagina = 841.89 - f.margem;
+  for (const r of opts.rows) {
+    const weekend = r.dow === 0 || r.dow === 6;
+    const shade = weekend || (!r.worked && r.obs) ? "#f3f4f6" : undefined;
+    const obsColor = /Falta injustificada/i.test(r.obs) ? "#b91c1c" : /Férias|Feriado|Ponte|Falta/i.test(r.obs) ? "#1d4ed8" : "#374151";
+    const dia = `${pad(r.day)} ${DOW[r.dow]}`;
+    const h = (v: string) => v || "—";
+    const valores = partTimeCompact
+      ? [dia, h(r.entrada), h(r.saida), r.horas || ""]
+      : [dia, h(r.entrada), h(r.saidaAlmoco), h(r.regressoAlmoco), h(partTimeHasLunch ? r.saida : r.saidaFinal), r.horas || ""];
+    const cells = [
+      ...valores.map((t) => ({ t })),
+      { t: r.obs, color: obsColor, bold: /Falta injustificada/i.test(r.obs), link: r.comprovativoUrl, linkText: "Ver comprovativo" },
+    ];
+    const o = { size: 9, pad: 3.5, fill: shade, border: "#e5e7eb" };
+    if (y + f.alturaLinhaTabela(cols, cells, o) > fundoPagina) {
+      f.novaPagina();
+      y = 24;
+      cabecalho();
+      cabecalhoTabela();
     }
-  </table>`
-      : ""
+    y += f.linhaTabela(x, y, cols, cells, o);
   }
 
-  <div class="foot">Documento gerado automaticamente a partir dos registos de ponto. Horas calculadas com base nas marcações de entrada/saída.</div>
+  // Totais
+  y += 12;
+  if (y + 70 > fundoPagina) { f.novaPagina(); y = 24; cabecalho(); }
+  const tc = [0.18, 0.08, 0.15, 0.12, 0.15, 0.08, 0.14, 0.1].map((p) => ({ w: W * p }));
+  y += f.linhaTabela(x, y, tc, [
+    { t: "Dias trabalhados", color: "#6b7280" }, { t: String(opts.totals.diasTrabalhados), bold: true, align: "right" },
+    { t: "Total de horas", color: "#6b7280" }, { t: formatMinutes(opts.totals.totalMin), bold: true, align: "right" },
+    { t: "Dias de férias", color: "#6b7280" }, { t: String(opts.totals.ferias), bold: true, align: "right" },
+    { t: "Faltas", color: "#6b7280" }, { t: String(opts.totals.faltas), bold: true, align: "right" },
+  ], { size: 10, pad: 6, border: "#e5e7eb" });
 
-</div></body></html>`;
+  if (opts.bonus && opts.bonus.effective) {
+    y += 8;
+    const bc = [{ w: W * 0.34 }, { w: W * 0.66 }];
+    y += f.linhaTabela(x, y, bc, [
+      { t: "Prémio de assiduidade e pontualidade", color: "#6b7280" },
+      { t: opts.bonus.qualified ? `QUALIFICADO — ${eur(opts.bonus.amount)}` : "NÃO QUALIFICADO", bold: true, color: opts.bonus.qualified ? "#15803d" : "#b91c1c" },
+    ], { size: 10, pad: 6, border: "#e5e7eb" });
+    if (!opts.bonus.qualified && opts.bonus.reasons.length) {
+      y += f.linhaTabela(x, y, bc, [{ t: "Motivo(s)", color: "#6b7280" }, { t: opts.bonus.reasons.join("\n"), color: "#6b7280" }], { size: 10, pad: 6, border: "#e5e7eb" });
+    }
+  }
+
+  y += 14;
+  f.texto("Documento gerado automaticamente a partir dos registos de ponto. Horas calculadas com base nas marcações de entrada/saída.", x, y, { size: 8.5, color: "#9ca3af", width: W });
+
+  return f.guardar();
 }
 
 // ── Carregar dados e gerar o PDF ──────────────────────────────────────────
@@ -418,7 +358,7 @@ export async function generateAttendancePdfById(
     reasons: payslip.premioQualificado ? [] : bonusCalc.reasons,
   };
 
-  const html = buildAttendanceHtml({
+  const buffer = await desenharAssiduidade({
     name: payslip.name,
     employeeNumber,
     category,
@@ -428,7 +368,6 @@ export async function generateAttendancePdfById(
     totals: { diasTrabalhados, totalMin, ferias, faltas },
     bonus,
   });
-  const buffer = await renderPayslipPdf(html);
   const safeName = payslip.name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

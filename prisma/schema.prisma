@@ -1002,7 +1002,7 @@ model EFaturaDocumento {
   @@index([mes])
 }
 
-// ---- Balancete (trazido de balancete2026.abacusai.app) ----
+// ---- Balancete ----
 // Contas do balancete: saldo de abertura numa data; o saldo atual é a abertura
 // mais os movimentos posteriores a essa data.
 model BalanceteConta {
@@ -1065,7 +1065,7 @@ model Backup {
 }
 
 // ---- Parceiros: contas correntes Criaconsensos (empresa A) ↔ cada parceiro (empresa B) ----
-// (trazida da app CONTA_CORRENTE da Abacus; cada parceiro tem a sua conta corrente)
+// (cada parceiro tem a sua conta corrente)
 model Parceiro {
   id           String              @id @default(cuid())
   nome         String              @db.VarChar(191)
@@ -1146,7 +1146,7 @@ model ParceiroAlocacao {
   @@index([workId])
 }
 
-// ---- Conexus: agenda de assuntos/tarefas (trazida da app CONEXUS / Painel de Despacho da Abacus) ----
+// ---- Conexus: agenda de assuntos/tarefas ----
 // Só para administradores da Gestão.
 model ConexusCategory {
   id                 String   @id @default(cuid())

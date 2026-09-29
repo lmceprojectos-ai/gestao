@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-// Armazenamento de ficheiros no disco do servidor (substitui o S3 da Abacus).
+// Armazenamento de ficheiros no disco do servidor.
 // A pasta pode ser definida em LOCAL_UPLOADS_DIR — convém ficar FORA da pasta da
 // aplicação no cPanel, para que um novo deploy nunca apague os documentos.
 export const LOCAL_UPLOADS_ROOT = path.resolve(

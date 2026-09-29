@@ -1,5 +1,5 @@
 // Acesso à IA (Claude, da Anthropic) para ler documentos e gerar textos.
-// Substitui a API da Abacus. A chave fica em ANTHROPIC_API_KEY (.env.production).
+// A chave fica em ANTHROPIC_API_KEY (.env.production).
 import Anthropic from '@anthropic-ai/sdk';
 
 const MODELO = 'claude-opus-5';

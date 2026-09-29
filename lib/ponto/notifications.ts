@@ -17,7 +17,7 @@ export async function sendEmail({
   body,
   recipientEmail,
 }: SendArgs): Promise<boolean> {
-  void notificationId; // herdado da Abacus; o envio é agora por SMTP
+  void notificationId; // não usado: o envio é por SMTP
   try {
     const { ok } = await sendMail({
       to: recipientEmail,

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { requireSocialAccess } from '@/lib/social/guard';
 
-// A criação de imagens por IA dependia da Abacus e está desligada por agora.
+// A criação de imagens por IA está desligada.
 // As imagens das publicações são carregadas manualmente.
 export async function POST() {
   const guard = await requireSocialAccess();

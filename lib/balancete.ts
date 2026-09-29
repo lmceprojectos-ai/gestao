@@ -1,4 +1,4 @@
-// Balancete (trazido de balancete2026.abacusai.app): contas, movimentos,
+// Balancete: contas, movimentos,
 // categorias e os cálculos do dashboard, das contas e dos relatórios.
 // Regras (iguais às do site original):
 //  - receitas = movimentos RECEITA; despesas = movimentos DESPESA (em valor absoluto);
