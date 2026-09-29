@@ -287,7 +287,7 @@ export function CollaboratorsClient() {
                 placeholder="email com que entra na Gestão ou no Ponto"
                 className="mt-1"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">Quem entrar com este email vê e trata só as tarefas deste colaborador.</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Quem entrar com este email vê e trata só as tarefas deste colaborador (mesmo que seja administrador da Gestão).</p>
             </div>
             <div>
               <Label>Cor</Label>

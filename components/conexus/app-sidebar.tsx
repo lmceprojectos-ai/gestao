@@ -27,7 +27,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { data: session } = useSession() || {}
-  const isAdmin = session?.user?.role === 'admin'
+  // Administrador do Conexus: administrador da Gestão sem colaborador ligado
+  const isAdmin = session?.user?.role === 'admin' && !(session?.user as any)?.collaboratorId
   const filteredItems = navItems.filter(item => !item.adminOnly || isAdmin)
   const temGestao = hasGestaoAccess((session?.user as any)?.role ?? '')
 

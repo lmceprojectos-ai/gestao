@@ -1,6 +1,7 @@
-// Sessão no Conexus: usa a sessão da Gestão. Os administradores veem e editam
-// tudo; os utilizadores cuja conta está ligada a um colaborador do Conexus (pelo
-// email da ficha do colaborador) só veem e mexem nas suas tarefas.
+// Sessão no Conexus: usa a sessão da Gestão. Os utilizadores cuja conta está
+// ligada a um colaborador do Conexus (pelo email da ficha do colaborador) só veem
+// e mexem nas suas tarefas — mesmo que sejam administradores da Gestão. Os
+// administradores da Gestão sem colaborador ligado veem e editam tudo.
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { NextResponse } from 'next/server'
@@ -21,7 +22,7 @@ export function forbiddenResponse() {
 }
 
 export function isAdmin(session: any) {
-  return session?.user?.role === 'admin'
+  return session?.user?.role === 'admin' && !session?.user?.collaboratorId
 }
 
 export function getCollaboratorFilter(session: any) {

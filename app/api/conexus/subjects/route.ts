@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { getAuthSession, unauthorizedResponse, getCollaboratorFilter } from '@/lib/conexus/session-helper'
+import { getAuthSession, unauthorizedResponse, getCollaboratorFilter, isAdmin } from '@/lib/conexus/session-helper'
 import { autoPassOverdue } from '@/lib/conexus/auto-pass'
 
 
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
     // Colaboradores (não-admin) só criam assuntos atribuídos a si próprios,
     // para que apareçam na sua visualização (que é filtrada pelo seu ID).
-    const isAdminUser = session?.user?.role === 'admin'
+    const isAdminUser = isAdmin(session)
     const finalCollaboratorId = isAdminUser
       ? (collaboratorId || null)
       : ((session?.user as any)?.collaboratorId || null)
