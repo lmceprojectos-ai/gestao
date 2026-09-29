@@ -1070,6 +1070,15 @@ model Parceiro {
   id           String              @id @default(cuid())
   nome         String              @db.VarChar(191)
   emailAvisos  String?             @db.VarChar(191)
+  // Ficha do parceiro: dados fiscais e contactos.
+  nif            String?  @db.VarChar(20)
+  morada         String?  @db.Text
+  codigoPostal   String?  @db.VarChar(20)
+  localidade     String?  @db.VarChar(120)
+  pais           String?  @db.VarChar(60)
+  responsavel    String?  @db.VarChar(191)
+  telefone       String?  @db.VarChar(40)
+  emailFaturacao String?  @db.VarChar(191)
   ativo        Boolean             @default(true)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt

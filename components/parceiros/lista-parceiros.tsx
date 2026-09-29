@@ -13,7 +13,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { formatSigned } from '@/lib/parceiros/format';
 import type { Totals } from '@/lib/parceiros/calc';
 
-type Conta = { id: string; link: string; convite: string | null; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
+type Ficha = { nif: string | null; morada: string | null; codigoPostal: string | null; localidade: string | null; pais: string | null; responsavel: string | null; telefone: string | null; emailFaturacao: string | null };
+type Conta = Ficha & { id: string; link: string; convite: string | null; nome: string; emailAvisos: string | null; ativo: boolean; registos: number; utilizadores: number; totals: Totals };
+
+const CAMPOS = [
+  ['nif', 'NIF', 'text', '500000000'],
+  ['morada', 'Morada', 'text', 'Rua, número, andar'],
+  ['codigoPostal', 'Código postal', 'text', '2830-000'],
+  ['localidade', 'Localidade', 'text', 'Barreiro'],
+  ['pais', 'País', 'text', 'Portugal'],
+  ['responsavel', 'Pessoa responsável', 'text', 'Nome'],
+  ['telefone', 'Contacto (telefone)', 'tel', '912 345 678'],
+  ['emailAvisos', 'Email de contacto', 'email', 'geral@empresa.pt'],
+  ['emailFaturacao', 'Email para faturação', 'email', 'faturacao@empresa.pt'],
+] as const;
 
 const cls = (v: number) => (v > 0 ? 'val-pos' : v < 0 ? 'val-neg' : 'text-muted-foreground');
 
@@ -43,13 +56,28 @@ Esta ação é permanente e não pode ser desfeita.`)) return;
     router.refresh();
   };
 
+  // Campos da ficha (além do nome).
+  const campo = (k: (typeof CAMPOS)[number][0]) => {
+    const [, label, tipo, ph] = CAMPOS.find(([x]) => x === k)!;
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={`p-${k}`}>{label}</Label>
+        <Input id={`p-${k}`} type={tipo} value={((editar as any)?.[k] as string) ?? ''} placeholder={ph}
+          onChange={(e) => setEditar((x) => ({ ...x, [k]: e.target.value }))} />
+      </div>
+    );
+  };
+
   const guardar = async () => {
-    if (!editar?.nome?.trim()) { toast.error('Indique o nome do parceiro'); return; }
+    if (!editar?.nome?.trim()) { toast.error('Indique o nome da empresa'); return; }
     setAGuardar(true);
     try {
       const r = await fetch('/api/parceiros/contas', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editar.id, nome: editar.nome, emailAvisos: editar.emailAvisos ?? '', ativo: editar.ativo !== false }),
+        body: JSON.stringify({
+          id: editar.id, nome: editar.nome, ativo: editar.ativo !== false,
+          ...Object.fromEntries(CAMPOS.map(([k]) => [k, (editar as any)[k] ?? ''])),
+        }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.message || 'Erro ao guardar');
@@ -70,7 +98,7 @@ Esta ação é permanente e não pode ser desfeita.`)) return;
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Parceiros</h1>
           <p className="text-muted-foreground mt-1">Uma conta corrente por parceiro — sempre na perspetiva da Criaconsensos. Cada parceiro só vê a sua.</p>
         </div>
-        <Button onClick={() => setEditar({ ativo: true })} className="gap-1.5 self-start sm:self-auto"><Plus className="h-4 w-4" /> Novo parceiro</Button>
+        <Button onClick={() => setEditar({ ativo: true, pais: 'Portugal' })} className="gap-1.5 self-start sm:self-auto"><Plus className="h-4 w-4" /> Novo parceiro</Button>
       </div>
 
       {contas.length === 0 ? (
@@ -83,12 +111,18 @@ Esta ação é permanente e não pode ser desfeita.`)) return;
                 <div className="min-w-0">
                   <p className="font-display text-lg font-bold flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" />{c.nome}{!c.ativo && <span className="text-xs font-normal text-muted-foreground">(inativo)</span>}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-                    {c.registos} registos · <Users className="h-3 w-3" />{c.utilizadores} utilizador(es){c.emailAvisos ? ` · avisos: ${c.emailAvisos}` : ''}
+                    {c.registos} registos · <Users className="h-3 w-3" />{c.utilizadores} utilizador(es)
                   </p>
+                  <div className="text-xs text-muted-foreground mt-1.5 space-y-0.5">
+                    {c.nif && <p>NIF {c.nif}</p>}
+                    {(c.responsavel || c.telefone) && <p>{[c.responsavel, c.telefone].filter(Boolean).join(' · ')}</p>}
+                    {c.emailAvisos && <p>Contacto: {c.emailAvisos}</p>}
+                    {c.emailFaturacao && <p>Faturação: {c.emailFaturacao}</p>}
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   {!c.ativo && <Button variant="ghost" size="icon" onClick={() => eliminar(c)} aria-label="Eliminar parceiro" title="Eliminar parceiro"><Trash2 className="h-4 w-4 text-destructive" /></Button>}
-                  <Button variant="ghost" size="icon" onClick={() => setEditar(c)} aria-label="Editar parceiro"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setEditar(c)} aria-label="Editar ficha do parceiro" title="Editar ficha"><Pencil className="h-4 w-4" /></Button>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-sm">
@@ -115,21 +149,32 @@ Esta ação é permanente e não pode ser desfeita.`)) return;
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground text-center">Para dar acesso a um parceiro, crie o utilizador em Gestão → Utilizadores com o perfil "Parceiro" e escolha o parceiro.</p>
+      <p className="text-xs text-muted-foreground text-center">Para dar acesso a um parceiro, envie-lhe o link de acesso: ele cria a conta e só vê a conta corrente da sua empresa.</p>
 
       <Dialog open={!!editar} onOpenChange={(v) => { if (!v) setEditar(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editar?.id ? 'Editar parceiro' : 'Novo parceiro'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="p-nome">Nome da empresa</Label>
-              <Input id="p-nome" value={editar?.nome ?? ''} onChange={(e) => setEditar((x) => ({ ...x, nome: e.target.value }))} placeholder="Ex.: Reclamarte" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="p-email">Email para os avisos</Label>
-              <Input id="p-email" type="email" value={editar?.emailAvisos ?? ''} onChange={(e) => setEditar((x) => ({ ...x, emailAvisos: e.target.value }))} placeholder="comercial@empresa.pt" />
-              <p className="text-xs text-muted-foreground">Recebe os avisos das alterações nesta conta (a Criaconsensos recebe sempre).</p>
-            </div>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editar?.id ? `Ficha — ${editar.nome ?? ''}` : 'Novo parceiro'}</DialogTitle></DialogHeader>
+          <div className="space-y-5">
+            <section className="space-y-3">
+              <p className="text-sm font-semibold">Empresa</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="p-nome">Nome da empresa *</Label>
+                  <Input id="p-nome" value={editar?.nome ?? ''} onChange={(e) => setEditar((x) => ({ ...x, nome: e.target.value }))} placeholder="Ex.: Reclamarte, Lda." />
+                </div>
+                {campo('nif')}
+              </div>
+            </section>
+            <section className="space-y-3">
+              <p className="text-sm font-semibold">Dados fiscais</p>
+              {campo('morada')}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{campo('codigoPostal')}{campo('localidade')}{campo('pais')}</div>
+            </section>
+            <section className="space-y-3">
+              <p className="text-sm font-semibold">Contactos</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{campo('responsavel')}{campo('telefone')}{campo('emailAvisos')}{campo('emailFaturacao')}</div>
+              <p className="text-xs text-muted-foreground">O email de contacto recebe os avisos das alterações na conta corrente (a Criaconsensos recebe sempre).</p>
+            </section>
             {editar?.id ? (
               <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-4 py-3">
                 <Label htmlFor="p-ativo">Parceiro ativo</Label>
