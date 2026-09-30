@@ -11,6 +11,31 @@ import { toast } from 'sonner';
 import { compressImage } from '@/lib/compress-image';
 
 const CATEGORIAS_CAIXA: Record<string, string> = { vendas: 'Vendas', compras: 'Compras', servicos: 'Serviços', reembolso: 'Reembolso', levantamento: 'Levantamento', outro: 'Outro' };
+// Escolhe a conta bancária do talão: primeiro pelos últimos dígitos do IBAN,
+// depois pelo nome do banco (aceita siglas: CGD, Montepio, BCP, ...).
+const SIGLAS: Record<string, string[]> = {
+  cgd: ['caixa geral', 'cgd'], montepio: ['montepio', 'mg'], bcp: ['millennium', 'bcp'],
+  santander: ['santander'], novobanco: ['novo banco', 'novobanco'], bpi: ['bpi'], ca: ['credito agricola', 'crédito agrícola', 'ca'],
+};
+function sem(s: string) { return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function contaDoTalao(contas: any[], banco?: string | null, digitos?: string | null) {
+  const ativas = contas.filter((c) => c.ativa !== false);
+  const dig = (digitos || '').replace(/\D/g, '');
+  if (dig.length >= 3) {
+    const porIban = ativas.filter((c) => (c.iban || '').replace(/\D/g, '').endsWith(dig));
+    if (porIban.length === 1) return porIban[0];
+  }
+  const b = sem(banco || '');
+  if (!b) return null;
+  const grupo = Object.values(SIGLAS).find((ns) => ns.some((n) => n.length > 2 ? b.includes(sem(n)) : b.split(/\W+/).includes(n)));
+  const bate = (c: any) => {
+    const t = sem(`${c.banco} ${c.nome}`);
+    return grupo ? grupo.some((n) => (n.length > 2 ? t.includes(sem(n)) : t.split(/\W+/).includes(n))) : t.includes(b) || b.includes(sem(c.banco));
+  };
+  const achadas = ativas.filter(bate);
+  return achadas.length >= 1 ? achadas[0] : null;
+}
+
 const EMPTY_FORM = { descricao: '', valor: '', data: '', tipo: 'entrada' as 'entrada' | 'saida', categoria: 'vendas', notas: '', contaBancariaId: '' };
 
 export default function CaixaPage() {
@@ -43,18 +68,28 @@ export default function CaixaPage() {
     if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
       setOcrLoading(true); setOcrDone(false);
       try {
-        const fd = new FormData(); fd.append('file', file); fd.append('tipo', 'comprovativo');
+        const fd = new FormData(); fd.append('file', file); fd.append('tipo', 'caixa');
         const r = await fetch('/api/ocr', { method: 'POST', body: fd }); const d = await r.json();
-        if (d.dados) {
+        const o = d?.success ? d.data : null;
+        if (o) {
+          const conta = contaDoTalao(contas, o.banco, o.conta);
+          const levantamento = o.operacao === 'levantamento';
+          const deposito = o.operacao === 'deposito';
           setForm(prev => ({
             ...prev,
-            ...(d.dados.descricao && { descricao: d.dados.descricao }),
-            ...(d.dados.valor && { valor: String(d.dados.valor) }),
-            ...(d.dados.data && { data: d.dados.data }),
+            descricao: o.descricao || (levantamento ? `Levantamento${o.banco ? ` ${o.banco}` : ''}` : prev.descricao),
+            ...(o.valor && { valor: String(o.valor) }),
+            ...(o.data && { data: o.data }),
+            ...(levantamento && { tipo: 'entrada' as const, categoria: 'levantamento' }),
+            ...(deposito && { tipo: 'saida' as const }),
+            ...(conta && { contaBancariaId: conta.id }),
           }));
-          setOcrDone(true); toast.success('Dados extraídos do documento');
+          setOcrDone(true);
+          toast.success(o.banco ? (conta ? `Dados extraídos · banco: ${conta.nome}` : `Dados extraídos · banco "${o.banco}" não encontrado nas contas`) : 'Dados extraídos do documento');
+        } else {
+          toast.error(d?.error ? `Não foi possível ler o talão: ${d.error}` : 'Não foi possível ler o talão');
         }
-      } catch {} finally { setOcrLoading(false); }
+      } catch { toast.error('Não foi possível ler o talão'); } finally { setOcrLoading(false); }
     }
   };
 

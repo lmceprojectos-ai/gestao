@@ -97,6 +97,24 @@ IMPORTANTE:
 - O valor líquido é o que o funcionário recebe efetivamente (bruto - descontos).
 - Procura campos como "Vencimento Base", "Remuneração Bruta", "Total de Abonos", "Líquido a Receber", "Seg. Social", "IRS".
 - Devolve APENAS o JSON, sem qualquer texto adicional.`;
+    } else if (tipo === 'caixa') {
+      prompt = `Analisa esta imagem de um talão/comprovativo bancário português relacionado com dinheiro em caixa (normalmente um talão de LEVANTAMENTO numa caixa multibanco ou ao balcão; também pode ser um depósito ou um talão de compra).
+Extrai os seguintes dados e devolve APENAS um objeto JSON válido (sem markdown, sem código, sem explicações):
+
+{
+  "operacao": "<'levantamento', 'deposito', 'compra' ou 'outro'>",
+  "valor": <montante da operação como número decimal ou null>,
+  "data": "<data da operação no formato YYYY-MM-DD ou null>",
+  "banco": "<nome do banco da conta de onde saiu/entrou o dinheiro, por extenso como aparece (ex.: 'Caixa Geral de Depósitos', 'Banco Montepio', 'Millennium bcp', 'Santander', 'Novo Banco', 'BPI', 'Crédito Agrícola') ou null>",
+  "conta": "<últimos dígitos do número da conta, do cartão ou do IBAN que aparecem no talão (só os dígitos visíveis) ou null>",
+  "local": "<local/terminal/agência onde foi feita a operação ou null>",
+  "descricao": "<descrição curta, ex.: 'Levantamento ATM Barreiro' ou null>"
+}
+
+IMPORTANTE:
+- O banco é o da CONTA/CARTÃO usado (o emissor do cartão ou o banco indicado no talão), não a rede (Multibanco/SIBS).
+- Siglas comuns: CGD = Caixa Geral de Depósitos; MG/Montepio = Banco Montepio; BCP = Millennium bcp; CA = Crédito Agrícola.
+- Devolve APENAS o JSON, sem qualquer texto adicional.`;
     } else if (tipo === 'comprovativo') {
       prompt = `Analisa esta imagem de um comprovativo de pagamento bancário português.
 Extrai os seguintes dados e devolve APENAS um objeto JSON válido (sem markdown, sem código, sem explicações):
