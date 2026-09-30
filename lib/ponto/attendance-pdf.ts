@@ -7,7 +7,7 @@
 import { prisma } from "@/lib/db";
 import { COMPANY, signPayslipToken } from "@/lib/ponto/payslip-pdf";
 import { Folha } from "@/lib/pdf/folha";
-import { workedMinutesForDay, formatMinutes } from "@/lib/ponto/schedule";
+import { workedMinutesForDay, formatMinutes, eachDate } from "@/lib/ponto/schedule";
 import {
   isHoliday,
   isBridge,
@@ -39,8 +39,26 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+// Período do registo, igual ao fecho dos recibos: do dia 26 do mês anterior ao
+// dia 25 do mês (ex.: setembro = 26/08 a 25/09).
+export function periodoAssiduidade(month: string): { from: string; to: string } {
+  const [y, m] = month.split("-").map((v) => parseInt(v, 10));
+  const prev = new Date(Date.UTC(y, m - 2, 1));
+  return {
+    from: `${prev.getUTCFullYear()}-${pad(prev.getUTCMonth() + 1)}-26`,
+    to: `${y}-${pad(m)}-25`,
+  };
+}
+
+function periodoTexto(month: string): string {
+  const { from, to } = periodoAssiduidade(month);
+  const f = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+  return `${f(from)} a ${f(to)}`;
+}
+
 type DayRow = {
   day: number;
+  mes: number; // mês do dia (o período vai de 26 do mês anterior a 25 do mês)
   dow: number; // 0=Dom .. 6=Sáb
   entrada: string;
   saidaAlmoco: string;
@@ -97,7 +115,7 @@ export async function desenharAssiduidade(opts: {
     f.texto(COMPANY.name, x, y, { size: 15, bold: true });
     f.texto(`NIF ${COMPANY.nif} · Livro de Ponto`, x, y + 19, { size: 9.5, color: "#6b7280" });
     f.texto("REGISTO DE ASSIDUIDADE", x, y + 2, { size: 12, bold: true, align: "right", width: W });
-    f.texto(`${monthName} de ${y0}`, x, y + 19, { size: 9.5, color: "#6b7280", align: "right", width: W });
+    f.texto(`${monthName} de ${y0} · ${periodoTexto(opts.month)}`, x, y + 19, { size: 9.5, color: "#6b7280", align: "right", width: W });
     y += 34;
     f.linha(x, y, x + W, y, { color: "#feca00", width: 3 });
     y += 10;
@@ -126,7 +144,7 @@ export async function desenharAssiduidade(opts: {
     const weekend = r.dow === 0 || r.dow === 6;
     const shade = weekend || (!r.worked && r.obs) ? "#f3f4f6" : undefined;
     const obsColor = /Falta injustificada/i.test(r.obs) ? "#b91c1c" : /Férias|Feriado|Ponte|Falta/i.test(r.obs) ? "#1d4ed8" : "#374151";
-    const dia = `${pad(r.day)} ${DOW[r.dow]}`;
+    const dia = `${pad(r.day)}/${pad(r.mes)} ${DOW[r.dow]}`;
     const h = (v: string) => v || "—";
     const valores = partTimeCompact
       ? [dia, h(r.entrada), h(r.saida), r.horas || ""]
@@ -185,9 +203,8 @@ export async function generateAttendancePdfById(
   const y = parseInt(yStr, 10);
   const m = parseInt(mStr, 10);
   if (!y || !m) return null;
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const from = `${y}-${pad(m)}-01`;
-  const to = `${y}-${pad(m)}-${pad(lastDay)}`;
+  // Do dia 26 do mês anterior ao dia 25 do mês (o fecho dos recibos).
+  const { from, to } = periodoAssiduidade(month);
 
   // Determinar o utilizador (por userId ou por nome)
   let userId = payslip.userId || null;
@@ -273,9 +290,9 @@ export async function generateAttendancePdfById(
   let faltas = 0;
   const today = todayStr();
 
-  for (let d = 1; d <= lastDay; d++) {
-    const ds = `${y}-${pad(m)}-${pad(d)}`;
-    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  for (const ds of eachDate(from, to)) {
+    const [dy, dm, d] = ds.split("-").map((v) => parseInt(v, 10));
+    const dow = new Date(Date.UTC(dy, dm - 1, d)).getUTCDay();
     const dp = punchesByDay.get(ds) ?? [];
     const byType = (t: string) => dp.find((x) => x.type === t)?.timestamp ?? null;
     const entrada = byType("ENTRADA");
@@ -325,6 +342,7 @@ export async function generateAttendancePdfById(
 
     rows.push({
       day: d,
+      mes: dm,
       dow,
       entrada: entrada ? hhmm(entrada) : "",
       saidaAlmoco: saidaAlmoco ? hhmm(saidaAlmoco) : "",
