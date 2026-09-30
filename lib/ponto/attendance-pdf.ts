@@ -93,12 +93,10 @@ export async function desenharAssiduidade(opts: {
   const monthName = m >= 1 && m <= 12 ? MESES[m - 1] : opts.month;
 
   const partTime = !!opts.partTime;
-  // Num colaborador a tempo parcial, se houver pelo menos um dia com pausa de
-  // almoço registada (dia completo), incluímos também as colunas de almoço para
-  // que esses dias mostrem a saída e o regresso do almoço. Caso contrário, usa-se
-  // o formato compacto (apenas Entrada e Saída).
-  const partTimeHasLunch = partTime && opts.rows.some((r) => r.saidaAlmoco || r.regressoAlmoco);
-  const partTimeCompact = partTime && !partTimeHasLunch;
+  // Tempo parcial: sempre o formato simples (Entrada e Saída), mesmo nos dias
+  // completos — a saída é a saída final e as horas contam as marcações todas.
+  const partTimeHasLunch = false;
+  const partTimeCompact = partTime;
 
   const f = await Folha.criar("helvetica", 28);
   const x = f.margem;
