@@ -166,8 +166,13 @@ export async function desenharAssiduidade(opts: {
     const obsColor = /Falta injustificada/i.test(r.obs) ? "#b91c1c" : /Férias|Feriado|Ponte|Falta/i.test(r.obs) ? "#1d4ed8" : "#374151";
     const dia = `${pad(r.day)}/${pad(r.mes)} ${DOW[r.dow]}`;
     const h = (v: string) => v || "—";
+    // Tempo parcial com colunas de almoço: um dia só de manhã (sem pausa e com
+    // saída antes das 14:30) mostra a saída em "Saída almoço".
+    const soManha = partTimeHasLunch && !r.saidaAlmoco && !r.regressoAlmoco && !!r.saida && r.saida < "14:30";
     const valores = partTimeCompact
       ? [dia, h(r.entrada), h(r.saida), r.horas || ""]
+      : soManha
+      ? [dia, h(r.entrada), h(r.saida), h(""), h(""), r.horas || ""]
       : [dia, h(r.entrada), h(r.saidaAlmoco), h(r.regressoAlmoco), h(partTimeHasLunch ? r.saida : r.saidaFinal), r.horas || ""];
     const cells = [
       { t: valores[0], color: cor.dia, bold: anterior },
