@@ -2,11 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, History, CalendarDays, Lock, Menu, X, Grid2X2, LogOut, PanelLeftClose, PanelLeftOpen, ArrowLeft } from 'lucide-react'
+import { LayoutDashboard, Users, Settings, History, CalendarDays, Lock, Menu, X, Grid2X2, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
-import { hasGestaoAccess } from '@/lib/ponto/roles'
 
 const navItems = [
   { href: '/conexus', label: 'Conexus', icon: LayoutDashboard, adminOnly: false },
@@ -30,7 +29,6 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   // Administrador do Conexus: administrador da Gestão sem colaborador ligado
   const isAdmin = session?.user?.role === 'admin' && !(session?.user as any)?.collaboratorId
   const filteredItems = navItems.filter(item => !item.adminOnly || isAdmin)
-  const temGestao = hasGestaoAccess((session?.user as any)?.role ?? '')
 
   return (
     <>
@@ -141,13 +139,6 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               </div>
             </div>
           )}
-          <Link
-            href={temGestao ? '/' : '/ponto/colaborador'}
-            className="flex items-center gap-2 w-full px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {temGestao ? 'Voltar à Gestão' : 'Voltar ao Ponto'}
-          </Link>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
             className="flex items-center gap-2 w-full px-3 py-2 text-xs text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
