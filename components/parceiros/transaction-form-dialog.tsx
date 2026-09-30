@@ -186,7 +186,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="reference">Referência (n.º da fatura ou do orçamento)</Label>
+            <Label htmlFor="reference">N.º da fatura ou do orçamento</Label>
             <Input
               id="reference"
               placeholder="Ex.: FT 2026/123 ou ORC 2026/45"

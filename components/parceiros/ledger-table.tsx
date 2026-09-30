@@ -83,7 +83,7 @@ export function LedgerTable({ rows, currentUserId, user, onEdit, onDelete, onRec
             <tr className="bg-primary text-primary-foreground text-left">
               <th className="px-3 py-3 font-semibold whitespace-nowrap">Data</th>
               <th className="px-3 py-3 font-semibold">Descrição / Trabalhos</th>
-              <th className="px-3 py-3 font-semibold">Referência</th>
+              <th className="px-3 py-3 font-semibold">N.º fatura / orçamento</th>
               <th className="px-3 py-3 font-semibold text-right whitespace-nowrap">Débito</th>
               <th className="px-3 py-3 font-semibold text-right whitespace-nowrap">Crédito</th>
               <th className="px-3 py-3 font-semibold text-right whitespace-nowrap">Movimento</th>

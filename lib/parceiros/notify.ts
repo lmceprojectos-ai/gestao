@@ -38,7 +38,7 @@ export async function notifyChange(params: NotifyParams): Promise<void> {
         <table style="width:100%; border-collapse:collapse; font-size:14px; margin-bottom:20px;">
           <tr><td style="padding:6px 0; color:#6b7280;">Data</td><td style="padding:6px 0; text-align:right; font-weight:600;">${esc(s.date)}</td></tr>
           <tr><td style="padding:6px 0; color:#6b7280;">Descrição</td><td style="padding:6px 0; text-align:right; font-weight:600;">${esc(s.description)}</td></tr>
-          <tr><td style="padding:6px 0; color:#6b7280;">Referência</td><td style="padding:6px 0; text-align:right;">${esc(s.reference) || '—'}</td></tr>
+          <tr><td style="padding:6px 0; color:#6b7280;">N.º fatura / orçamento</td><td style="padding:6px 0; text-align:right;">${esc(s.reference) || '—'}</td></tr>
           <tr><td style="padding:6px 0; color:#6b7280;">Tipo</td><td style="padding:6px 0; text-align:right;">${esc(s.typeLabel)}</td></tr>
           <tr><td style="padding:6px 0; color:#6b7280;">Valor</td><td style="padding:6px 0; text-align:right; font-weight:600;">${formatSigned(s.amount)}</td></tr>
           <tr><td style="padding:6px 0; color:#6b7280;">Estado</td><td style="padding:6px 0; text-align:right;">${s.isBilled ? 'Faturado' : 'Não Faturado'}</td></tr>
