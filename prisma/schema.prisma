@@ -1099,6 +1099,10 @@ model ParceiroTransacao {
   amount           Decimal  @db.Decimal(12, 2)
   type             String   @db.VarChar(10)
   paymentDirection String?  @db.VarChar(10)
+  // Forma de pagamento (só nos pagamentos): TRANSFERENCIA | NUMERARIO | ENCONTRO_CONTAS
+  paymentMethod    String?  @db.VarChar(20)
+  // Marcado à mão como liquidado (sem ligação a um pagamento). Não altera saldos.
+  liquidado        Boolean  @default(false)
   isBilled         Boolean  @default(false)
   orderIndex       Int
   company          String   @db.VarChar(20)

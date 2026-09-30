@@ -17,12 +17,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import type { EnrichedTransaction, TransactionType } from '@/lib/parceiros/calc'
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/lib/parceiros/calc'
+import type { EnrichedTransaction, TransactionType, PaymentMethod } from '@/lib/parceiros/calc'
 
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onSaved: () => void
+  onSaved: (guardado?: { id?: string; novoPagamento?: boolean }) => void
   user: { company: string | null; isAdmin: boolean }
   editTx: EnrichedTransaction | null
 }
@@ -54,6 +55,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<TransactionType>(types[0] ?? 'DEBIT')
   const [paymentDirection, setPaymentDirection] = useState<'A_PAYS_B' | 'B_PAYS_A'>('A_PAYS_B')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('')
   const [isBilled, setIsBilled] = useState(false)
   const [notify, setNotify] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -67,6 +69,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
       setAmount(String(editTx?.amount ?? ''))
       setType((editTx?.type ?? types[0] ?? 'DEBIT') as TransactionType)
       setPaymentDirection((editTx?.paymentDirection ?? 'A_PAYS_B') as any)
+      setPaymentMethod((editTx?.paymentMethod ?? '') as PaymentMethod | '')
       setIsBilled(Boolean(editTx?.isBilled))
       setNotify(true)
     } else {
@@ -76,6 +79,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
       setAmount('')
       setType(types[0] ?? 'DEBIT')
       setPaymentDirection('A_PAYS_B')
+      setPaymentMethod('')
       setIsBilled(false)
       setNotify(true)
     }
@@ -97,6 +101,10 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
       toast.error('Indique um valor válido.')
       return
     }
+    if (type === 'PAYMENT' && !paymentMethod) {
+      toast.error('Escolha a forma de pagamento.')
+      return
+    }
     setSaving(true)
     try {
       const payload = {
@@ -106,6 +114,7 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
         amount: amt,
         type,
         paymentDirection: type === 'PAYMENT' ? paymentDirection : null,
+        paymentMethod: type === 'PAYMENT' ? paymentMethod : null,
         isBilled,
         notify,
       }
@@ -121,9 +130,10 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
         toast.error(data?.message ?? 'Não foi possível guardar o registo.')
         return
       }
-      toast.success(editTx ? 'Registo atualizado.' : 'Registo criado.')
+      const novoPagamento = !editTx && type === 'PAYMENT'
+      toast.success(editTx ? 'Registo atualizado.' : novoPagamento ? 'Pagamento criado. Indique agora a que trabalho(s) se refere.' : 'Registo criado.')
       onOpenChange(false)
-      onSaved()
+      onSaved({ id: data?.id, novoPagamento })
     } catch (err) {
       toast.error('Ocorreu um erro ao guardar.')
     } finally {
@@ -212,6 +222,23 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
               >
                 <option value="A_PAYS_B">Criaconsensos paga a {conta.nome}</option>
                 <option value="B_PAYS_A">{conta.nome} paga à Criaconsensos</option>
+              </select>
+            </div>
+          ) : null}
+
+          {type === 'PAYMENT' ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="method">Forma de pagamento</Label>
+              <select
+                id="method"
+                className={selectClass}
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              >
+                <option value="" disabled>Escolha a forma de pagamento…</option>
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
+                ))}
               </select>
             </div>
           ) : null}

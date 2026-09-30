@@ -82,6 +82,7 @@ export function ReconcileDialog({ open, onOpenChange, tx, allRows, user, onChang
   const [selectedCounterpart, setSelectedCounterpart] = useState('')
   const [linkAmount, setLinkAmount] = useState('')
   const [linking, setLinking] = useState(false)
+  const [marcando, setMarcando] = useState(false)
 
   const isPayment = tx?.type === 'PAYMENT'
   const canModify = Boolean(user?.isAdmin) || (tx ? tx.createdById === user?.company : false)
@@ -221,6 +222,30 @@ export function ReconcileDialog({ open, onOpenChange, tx, allRows, user, onChang
     }
   }
 
+  // Marca (ou desmarca) como liquidado sem ligar a um pagamento.
+  const marcarLiquidado = async (liquidado: boolean) => {
+    if (!tx) return
+    setMarcando(true)
+    try {
+      const res = await fetch(`/api/parceiros/transactions/${tx.id}/liquidado`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liquidado }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.message ?? 'Não foi possível alterar o estado.')
+        return
+      }
+      toast.success(liquidado ? 'Marcado como liquidado.' : 'Deixou de estar marcado como liquidado.')
+      onChanged()
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Erro ao alterar o estado.')
+    } finally {
+      setMarcando(false)
+    }
+  }
+
   const handleRemoveLink = async (allocationId: string) => {
     setBusyLinkId(allocationId)
     try {
@@ -271,7 +296,18 @@ export function ReconcileDialog({ open, onOpenChange, tx, allRows, user, onChang
             <p className="text-muted-foreground text-xs">Em falta</p>
             <p className="font-mono font-semibold">{formatEUR(tx.outstanding)}</p>
           </div>
-          <div className="col-span-3">{statusBadge(tx.settlementStatus)}</div>
+          <div className="col-span-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              {statusBadge(tx.settlementStatus)}
+              {tx.liquidado ? <span className="text-xs text-muted-foreground">marcado à mão</span> : null}
+            </span>
+            {canModify && (tx.liquidado || tx.settlementStatus !== 'PAID') ? (
+              <Button type="button" size="sm" variant="outline" disabled={marcando} onClick={() => marcarLiquidado(!tx.liquidado)}>
+                {marcando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                {tx.liquidado ? 'Desmarcar liquidado' : 'Marcar como liquidado'}
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {/* SECÇÃO RECONCILIAÇÃO */}

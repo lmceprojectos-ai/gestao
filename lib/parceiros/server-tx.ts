@@ -47,6 +47,8 @@ export async function getAllDTO(parceiroId: string): Promise<TransactionDTO[]> {
       amount: Number(t.amount ?? 0),
       type: t.type as any,
       paymentDirection: (t.paymentDirection ?? null) as any,
+      paymentMethod: (t.paymentMethod ?? null) as any,
+      liquidado: !!t.liquidado,
       isBilled: t.isBilled,
       orderIndex: t.orderIndex,
       // O ecrã decide "é meu?" por createdById: usamos a empresa dona do registo.

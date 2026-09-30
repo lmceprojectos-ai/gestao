@@ -1,6 +1,7 @@
 // Leitura e validação dos dados de um registo (criar/editar), com as regras de
 // quem pode registar o quê: débitos só a Criaconsensos, créditos só o parceiro.
-import type { TransactionType, PaymentDirection } from '@/lib/parceiros/calc';
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/lib/parceiros/calc';
+import type { TransactionType, PaymentDirection, PaymentMethod } from '@/lib/parceiros/calc';
 import type { UtilizadorParceiros } from '@/lib/parceiros/acesso';
 
 const round2 = (n: number) => Math.round((Number(n ?? 0) + Number.EPSILON) * 100) / 100;
@@ -14,9 +15,17 @@ export function lerRegisto(body: any, user: UtilizadorParceiros) {
   const isBilled = Boolean(body?.isBilled);
   const notify = body?.notify !== false;
   const paymentDirection: PaymentDirection | null = type === 'PAYMENT' ? ((body?.paymentDirection as PaymentDirection) === 'B_PAYS_A' ? 'B_PAYS_A' : 'A_PAYS_B') : null;
+  const paymentMethod: PaymentMethod | null = type === 'PAYMENT' && PAYMENT_METHODS.includes(body?.paymentMethod) ? body.paymentMethod : null;
   if (!description || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !['DEBIT', 'CREDIT', 'PAYMENT'].includes(type)) {
     return { erro: 'Dados inválidos.', status: 400 } as const;
   }
+  if (type === 'PAYMENT' && !paymentMethod) return { erro: 'Escolha a forma de pagamento.', status: 400 } as const;
   if (!user.isAdmin && type === 'DEBIT') return { erro: 'Apenas a Criaconsensos pode registar débitos.', status: 403 } as const;
-  return { description, reference, date, type, amount, isBilled, notify, paymentDirection };
+  return { description, reference, date, type, amount, isBilled, notify, paymentDirection, paymentMethod };
+}
+
+// Rótulo do tipo para os emails, com a forma de pagamento nos pagamentos.
+export function rotuloTipo(labels: Record<TransactionType, string>, type: TransactionType, paymentMethod: string | null | undefined): string {
+  const m = paymentMethod ? PAYMENT_METHOD_LABELS[paymentMethod as PaymentMethod] : '';
+  return m ? `${labels[type]} — ${m}` : labels[type];
 }

@@ -315,7 +315,11 @@ export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
       <TransactionFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSaved={refresh}
+        onSaved={async (guardado) => {
+          await refresh()
+          // Pagamento novo: abrir logo a reconciliação para indicar a que trabalho(s) se refere.
+          if (guardado?.novoPagamento && guardado.id) setReconcileId(guardado.id)
+        }}
         user={user}
         editTx={editTx}
       />

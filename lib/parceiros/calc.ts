@@ -2,6 +2,14 @@
 export type Company = 'CRIACONSENSOS' | 'PARCEIRO'
 export type TransactionType = 'DEBIT' | 'CREDIT' | 'PAYMENT'
 export type PaymentDirection = 'A_PAYS_B' | 'B_PAYS_A'
+export type PaymentMethod = 'TRANSFERENCIA' | 'NUMERARIO' | 'ENCONTRO_CONTAS'
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  TRANSFERENCIA: 'Transferência bancária',
+  NUMERARIO: 'Numerário',
+  ENCONTRO_CONTAS: 'Encontro de contas',
+}
+export const PAYMENT_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]
 
 export interface AttachmentDTO {
   id: string
@@ -32,6 +40,8 @@ export interface TransactionDTO {
   amount: number
   type: TransactionType
   paymentDirection: PaymentDirection | null
+  paymentMethod: PaymentMethod | null
+  liquidado: boolean // marcado à mão como liquidado
   isBilled: boolean
   orderIndex: number
   createdById: string
@@ -100,10 +110,11 @@ export function enrich(transactions: TransactionDTO[]): {
 
     const amount = round2(Number(t?.amount ?? 0))
     const allocated = round2(Number(t?.allocatedAmount ?? 0))
-    const outstanding = round2(amount - allocated)
+    const outstanding = t?.liquidado ? 0 : round2(amount - allocated)
     let settlementStatus: SettlementStatus | null = null
     if (t?.type === 'DEBIT' || t?.type === 'CREDIT' || t?.type === 'PAYMENT') {
-      if (allocated <= 0) settlementStatus = 'UNPAID'
+      if (t?.liquidado) settlementStatus = 'PAID'
+      else if (allocated <= 0) settlementStatus = 'UNPAID'
       else if (allocated + 0.001 >= amount) settlementStatus = 'PAID'
       else settlementStatus = 'PARTIAL'
     }

@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Pencil, Trash2, Inbox, Link2, Paperclip } from 'lucide-react'
+import { PAYMENT_METHOD_LABELS } from '@/lib/parceiros/calc'
 import type { EnrichedTransaction, SettlementStatus } from '@/lib/parceiros/calc'
 import { formatEUR, formatSigned, formatDatePT } from '@/lib/parceiros/format'
 
@@ -105,6 +106,11 @@ export function LedgerTable({ rows, currentUserId, user, onEdit, onDelete, onRec
                 </td>
                 <td className="px-3 py-2.5 max-w-[320px]">
                   <span className="line-clamp-2">{t?.description}</span>
+                  {t?.type === 'PAYMENT' && t?.paymentMethod ? (
+                    <span className="mt-0.5 inline-block rounded bg-secondary px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                      {PAYMENT_METHOD_LABELS[t.paymentMethod]}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">
                   {t?.reference || <span className="text-muted-foreground/50">—</span>}
