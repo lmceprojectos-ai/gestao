@@ -160,9 +160,13 @@ export async function generatePayslipsForMonth(
           punchesByDay.get(r.workDate)!.push({ type: r.type, timestamp: r.timestamp });
           if (r.type === "ENTRADA") ptEntradaDays.add(r.workDate);
         }
+        // A partir do recibo de outubro de 2026, um dia sem horas contadas (por
+        // exemplo, só com a entrada marcada) não conta: não se assume meio período.
+        const semHorasNaoConta = month >= "2026-10";
         for (const d of Array.from(ptEntradaDays)) {
-          partTimeDaysWorked++;
           const minutes = workedMinutesForDay(punchesByDay.get(d) ?? []);
+          if (semHorasNaoConta && minutes <= 0) continue;
+          partTimeDaysWorked++;
           partTimePeriods += minutes >= FULL_DAY_MINUTES ? 2 : 1;
         }
       }
