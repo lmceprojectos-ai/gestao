@@ -93,10 +93,12 @@ export async function desenharAssiduidade(opts: {
   const monthName = m >= 1 && m <= 12 ? MESES[m - 1] : opts.month;
 
   const partTime = !!opts.partTime;
-  // Tempo parcial: sempre o formato simples (Entrada e Saída), mesmo nos dias
-  // completos — a saída é a saída final e as horas contam as marcações todas.
-  const partTimeHasLunch = false;
-  const partTimeCompact = partTime;
+  // Num colaborador a tempo parcial, se houver pelo menos um dia com pausa de
+  // almoço registada (dia completo), incluímos também as colunas de almoço para
+  // que esses dias mostrem a saída e o regresso do almoço. Caso contrário, usa-se
+  // o formato compacto (apenas Entrada e Saída).
+  const partTimeHasLunch = partTime && opts.rows.some((r) => r.saidaAlmoco || r.regressoAlmoco);
+  const partTimeCompact = partTime && !partTimeHasLunch;
 
   const f = await Folha.criar("helvetica", 28);
   const x = f.margem;
@@ -138,7 +140,27 @@ export async function desenharAssiduidade(opts: {
   cabecalhoTabela();
 
   const fundoPagina = 841.89 - f.margem;
+  // Mês anterior (dias 26 a 31) a azul; mês do recibo (1 a 25) a amarelo.
+  const COR_ANTERIOR = { faixa: "#dbeafe", texto: "#1e40af", dia: "#1d4ed8", borda: "#bfdbfe" };
+  const COR_ATUAL = { faixa: "#fef3c7", texto: "#92400e", dia: "#111827", borda: "#fde68a" };
+  let mesDaFaixa = -1;
   for (const r of opts.rows) {
+    const anterior = r.mes !== m;
+    const cor = anterior ? COR_ANTERIOR : COR_ATUAL;
+    if (r.mes !== mesDaFaixa) {
+      mesDaFaixa = r.mes;
+      const doMes = opts.rows.filter((rr) => rr.mes === r.mes);
+      const nome = MESES[r.mes - 1] ?? "";
+      const texto = `${nome.toUpperCase()} — ${anterior ? "mês anterior" : "mês do recibo"} (dias ${pad(doMes[0].day)} a ${pad(doMes[doMes.length - 1].day)})`;
+      const faixa = { size: 8.5, pad: 4, fill: cor.faixa, border: cor.borda, bold: true, color: cor.texto };
+      if (y + f.alturaLinhaTabela([{ w: W }], [{ t: texto }], faixa) + 20 > fundoPagina) {
+        f.novaPagina();
+        y = 24;
+        cabecalho();
+        cabecalhoTabela();
+      }
+      y += f.linhaTabela(x, y, [{ w: W }], [{ t: texto }], faixa);
+    }
     const weekend = r.dow === 0 || r.dow === 6;
     const shade = weekend || (!r.worked && r.obs) ? "#f3f4f6" : undefined;
     const obsColor = /Falta injustificada/i.test(r.obs) ? "#b91c1c" : /Férias|Feriado|Ponte|Falta/i.test(r.obs) ? "#1d4ed8" : "#374151";
@@ -148,7 +170,8 @@ export async function desenharAssiduidade(opts: {
       ? [dia, h(r.entrada), h(r.saida), r.horas || ""]
       : [dia, h(r.entrada), h(r.saidaAlmoco), h(r.regressoAlmoco), h(partTimeHasLunch ? r.saida : r.saidaFinal), r.horas || ""];
     const cells = [
-      ...valores.map((t) => ({ t })),
+      { t: valores[0], color: cor.dia, bold: anterior },
+      ...valores.slice(1).map((t) => ({ t })),
       { t: r.obs, color: obsColor, bold: /Falta injustificada/i.test(r.obs), link: r.comprovativoUrl, linkText: "Ver comprovativo" },
     ];
     const o = { size: 9, pad: 3.5, fill: shade, border: "#e5e7eb" };
@@ -158,7 +181,10 @@ export async function desenharAssiduidade(opts: {
       cabecalho();
       cabecalhoTabela();
     }
-    y += f.linhaTabela(x, y, cols, cells, o);
+    // Barra de cor à esquerda de cada dia, com a cor do mês
+    const hLinha = f.linhaTabela(x, y, cols, cells, o);
+    f.caixa(x, y, 3, hLinha, { fill: anterior ? COR_ANTERIOR.dia : "#f59e0b" });
+    y += hLinha;
   }
 
   // Totais
