@@ -322,6 +322,7 @@ export function LedgerDashboard({ initialRows, initialTotals, user }: Props) {
         }}
         user={user}
         editTx={editTx}
+        allRows={rows}
       />
 
       <ReconcileDialog

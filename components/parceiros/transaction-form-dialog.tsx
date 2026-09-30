@@ -1,7 +1,7 @@
 'use client'
 import { useConta } from '@/components/parceiros/conta'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import {
@@ -26,6 +26,14 @@ interface Props {
   onSaved: (guardado?: { id?: string; novoPagamento?: boolean }) => void
   user: { company: string | null; isAdmin: boolean }
   editTx: EnrichedTransaction | null
+  allRows?: EnrichedTransaction[]
+}
+
+const eur = (n: number) => `${(Math.round(n * 100) / 100).toFixed(2).replace('.', ',')} €`
+const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100
+function dataPT(d: string) {
+  const [y, m, dd] = String(d).slice(0, 10).split('-')
+  return `${dd}/${m}/${y}`
 }
 
 const selectClass =
@@ -46,7 +54,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editTx }: Props) {
+export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editTx, allRows = [] }: Props) {
   const conta = useConta()
   const types = allowedTypes(user?.company ?? null, Boolean(user?.isAdmin))
   const [date, setDate] = useState(todayStr())
@@ -59,9 +67,37 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
   const [isBilled, setIsBilled] = useState(false)
   const [notify, setNotify] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Reconciliação no próprio registo: trabalho -> valor a aplicar deste pagamento
+  const [ligar, setLigar] = useState<Record<string, string>>({})
+
+  const novoPagamento = !editTx && type === 'PAYMENT'
+  // Trabalhos por liquidar do mesmo grupo (com fatura / sem fatura) que o pagamento
+  const trabalhos = useMemo(
+    () =>
+      novoPagamento
+        ? allRows.filter((r) => (r.type === 'DEBIT' || r.type === 'CREDIT') && Number(r.outstanding ?? 0) > 0.001 && Boolean(r.isBilled) === isBilled)
+        : [],
+    [novoPagamento, allRows, isBilled]
+  )
+  const totalLigado = round2(Object.entries(ligar).reduce((s, [id, v]) => (trabalhos.some((t) => t.id === id) ? s + (Number(String(v).replace(',', '.')) || 0) : s), 0))
+  const porAplicar = round2((Number(amount) || 0) - totalLigado)
+
+  const alternarTrabalho = (t: EnrichedTransaction) => {
+    setLigar((atual) => {
+      const n = { ...atual }
+      if (t.id in n) delete n[t.id]
+      else {
+        const livre = round2((Number(amount) || 0) - totalLigado)
+        const sugerido = livre > 0 ? Math.min(Number(t.outstanding ?? 0), livre) : Number(t.outstanding ?? 0)
+        n[t.id] = sugerido.toFixed(2)
+      }
+      return n
+    })
+  }
 
   useEffect(() => {
     if (!open) return
+    setLigar({})
     if (editTx) {
       setDate(String(editTx?.date ?? todayStr()).slice(0, 10))
       setDescription(editTx?.description ?? '')
@@ -105,6 +141,19 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
       toast.error('Escolha a forma de pagamento.')
       return
     }
+    const ligacoes = novoPagamento
+      ? trabalhos.filter((t) => t.id in ligar).map((t) => ({ t, valor: round2(Number(String(ligar[t.id]).replace(',', '.')) || 0) }))
+      : []
+    for (const { t, valor } of ligacoes) {
+      if (!(valor > 0) || valor - 0.001 > Number(t.outstanding ?? 0)) {
+        toast.error(`Valor inválido para "${t.description.slice(0, 40)}" (em falta: ${eur(Number(t.outstanding ?? 0))}).`)
+        return
+      }
+    }
+    if (ligacoes.length && totalLigado - 0.001 > amt) {
+      toast.error(`Os trabalhos escolhidos (${eur(totalLigado)}) ultrapassam o valor do pagamento (${eur(amt)}).`)
+      return
+    }
     setSaving(true)
     try {
       const payload = {
@@ -130,10 +179,29 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
         toast.error(data?.message ?? 'Não foi possível guardar o registo.')
         return
       }
-      const novoPagamento = !editTx && type === 'PAYMENT'
-      toast.success(editTx ? 'Registo atualizado.' : novoPagamento ? 'Pagamento criado. Indique agora a que trabalho(s) se refere.' : 'Registo criado.')
+      // Ligar logo o pagamento aos trabalhos escolhidos
+      let ligados = 0
+      for (const { t, valor } of ligacoes) {
+        const r = await fetch('/api/parceiros/allocations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentId: data?.id, workId: t.id, amount: valor }),
+        })
+        if (r.ok) ligados++
+        else {
+          const e = await r.json().catch(() => ({}))
+          toast.error(`Não foi possível ligar "${t.description.slice(0, 40)}": ${e?.message ?? 'erro'}`)
+        }
+      }
+      toast.success(
+        editTx ? 'Registo atualizado.'
+          : novoPagamento && ligados ? `Pagamento criado e reconciliado com ${ligados} trabalho(s).`
+          : novoPagamento ? 'Pagamento criado. Indique agora a que trabalho(s) se refere.'
+          : 'Registo criado.'
+      )
       onOpenChange(false)
-      onSaved({ id: data?.id, novoPagamento })
+      // Sem trabalhos escolhidos, abre-se a janela de reconciliação a seguir.
+      onSaved({ id: data?.id, novoPagamento: novoPagamento && ligacoes.length === 0 })
     } catch (err) {
       toast.error('Ocorreu um erro ao guardar.')
     } finally {
@@ -240,6 +308,53 @@ export function TransactionFormDialog({ open, onOpenChange, onSaved, user, editT
                   <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>
                 ))}
               </select>
+            </div>
+          ) : null}
+
+          {novoPagamento && paymentMethod ? (
+            <div className="space-y-2 rounded-lg border border-border/70 p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>A que trabalho(s) se refere este pagamento?</Label>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">{isBilled ? 'Com fatura' : 'Sem fatura'}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Mostra os trabalhos {isBilled ? 'com' : 'sem'} fatura por liquidar (mude em “Faturado”, mais abaixo). Pode escolher vários e ajustar o valor de cada um.
+              </p>
+              {trabalhos.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">Não há trabalhos {isBilled ? 'com' : 'sem'} fatura por liquidar.</p>
+              ) : (
+                <ul className="max-h-60 overflow-y-auto divide-y divide-border/60 rounded-md border border-border/60">
+                  {trabalhos.map((t) => {
+                    const marcado = t.id in ligar
+                    return (
+                      <li key={t.id} className={`flex items-start gap-2 px-2.5 py-2 text-sm ${marcado ? 'bg-secondary/60' : ''}`}>
+                        <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={marcado} onChange={() => alternarTrabalho(t)} aria-label={`Ligar a ${t.description}`} />
+                        <button type="button" className="flex-1 min-w-0 text-left" onClick={() => alternarTrabalho(t)}>
+                          <span className="block truncate font-medium">{t.description}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {dataPT(t.date)} · {t.type === 'DEBIT' ? 'Criaconsensos' : conta.nome}
+                            {t.reference ? ` · ${t.reference}` : ''} · em falta {eur(Number(t.outstanding ?? 0))}
+                          </span>
+                        </button>
+                        {marcado ? (
+                          <Input
+                            className="h-8 w-24 shrink-0 text-right"
+                            inputMode="decimal"
+                            value={ligar[t.id]}
+                            onChange={(e) => setLigar((a) => ({ ...a, [t.id]: e.target.value }))}
+                            aria-label="Valor a aplicar"
+                          />
+                        ) : null}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {Object.keys(ligar).length ? (
+                <p className={`text-xs ${porAplicar < -0.001 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                  Aplicado: {eur(totalLigado)} · {porAplicar < -0.001 ? `excede o pagamento em ${eur(-porAplicar)}` : `por aplicar: ${eur(porAplicar)}`}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
