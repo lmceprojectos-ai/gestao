@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/ponto/admin-guard";
 import { hasGestaoAccess } from "@/lib/ponto/roles";
+import { definirPresencaAutomatica } from "@/lib/ponto/presenca-automatica";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function PATCH(
       data,
       select: { id: true, email: true, name: true, role: true, pontoRole: true, active: true, sendToAccounting: true, partTime: true },
     });
+    // Presença automática nos dias úteis (guardada nas definições do ponto)
+    if (typeof body?.presencaAutomatica === "boolean") await definirPresencaAutomatica(params.id, body.presencaAutomatica);
     const { pontoRole, role, ...rest } = updated;
     const user = { ...rest, role: pontoRole ?? (role === "ADMIN" ? "ADMIN" : "COLABORADOR") };
     return NextResponse.json({ success: true, user });

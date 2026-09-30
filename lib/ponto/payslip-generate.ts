@@ -11,6 +11,7 @@ import {
 } from "@/lib/ponto/payroll";
 import { computeAttendanceBonus, type DelayInfo } from "@/lib/ponto/bonus";
 import { countBonusInjustifiedDays } from "@/lib/ponto/bonus-data";
+import { aplicarPresencaAutomatica } from "@/lib/ponto/presenca-automatica";
 
 export type GeneratedRow = {
   name: string;
@@ -30,6 +31,8 @@ export async function generatePayslipsForMonth(
   month: string,
   opts?: { userId?: string }
 ): Promise<{ month: string; rows: GeneratedRow[] }> {
+  // Dias úteis de quem tem presença automática ficam marcados antes de calcular.
+  await aplicarPresencaAutomatica(true).catch((e) => console.error("Presença automática:", e));
   if (!/^\d{4}-\d{2}$/.test(month)) {
     throw new Error("Mês inválido");
   }

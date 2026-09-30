@@ -6,6 +6,7 @@ import { getClientIp, isIpAllowed, parseDevice } from "@/lib/ponto/ip";
 import { computeDelays, getLisbonParts, PUNCH_LABELS } from "@/lib/ponto/schedule";
 import { sendEmail, emailTemplate, ADMIN_EMAIL } from "@/lib/ponto/notifications";
 import { verifyQrToken } from "@/lib/ponto/presence";
+import { aplicarPresencaAutomatica } from "@/lib/ponto/presenca-automatica";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ const VALID_TYPES = [
 
 export async function GET() {
   try {
+    await aplicarPresencaAutomatica().catch((e) => console.error("Presença automática:", e));
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ message: "Não autenticado." }, { status: 401 });

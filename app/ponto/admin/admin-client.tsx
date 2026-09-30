@@ -31,7 +31,7 @@ import { ThemeToggle } from "@/components/ponto/theme-toggle";
 import { AccountBox } from "@/components/ponto/account-box";
 import { FichasAdmin } from "./fichas-admin";
 
-type UserT = { id: string; name: string; email: string; role: string; active: boolean; sendToAccounting?: boolean; partTime?: boolean };
+type UserT = { id: string; name: string; email: string; role: string; active: boolean; sendToAccounting?: boolean; partTime?: boolean; presencaAutomatica?: boolean };
 type PunchT = { id: string; type: string; timestamp: string; workDate: string; ipAddress?: string | null; device?: string | null; lateMinutes: number; extraMinutes: number; note?: string | null; delayReason?: string | null; user: { name: string; email: string } };
 type AbsenceT = { id: string; absenceDate: string; status: string; reason?: string | null; observation?: string | null; attachmentName?: string | null; decisionNote?: string | null; user: { name: string; email: string } };
 type ReportRow = { userId: string; name: string; email: string; role: string; daysWorked: number; workedMinutes: number; lateMinutes: number; extraMinutes: number; absencesTotal: number; absencesJustified: number; absencesUnjustified: number; absencesPending: number };
@@ -1454,10 +1454,11 @@ function EditUserDialog({ user, onSaved }: { user: UserT; onSaved: () => void })
   const [active, setActive] = useState(user.active); const [password, setPassword] = useState("");
   const [sendToAccounting, setSendToAccounting] = useState(!!user.sendToAccounting);
   const [partTime, setPartTime] = useState(!!user.partTime);
+  const [presencaAutomatica, setPresencaAutomatica] = useState(!!user.presencaAutomatica);
   const [loading, setLoading] = useState(false);
   async function submit() {
     setLoading(true);
-    const body: any = { name, role, active, sendToAccounting, partTime: role === "COLABORADOR" ? partTime : false };
+    const body: any = { name, role, active, sendToAccounting, partTime: role === "COLABORADOR" ? partTime : false, presencaAutomatica };
     if (password) body.password = password;
     const res = await fetch(`/api/ponto/admin/users/${user.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setLoading(false);
@@ -1487,6 +1488,10 @@ function EditUserDialog({ user, onSaved }: { user: UserT; onSaved: () => void })
               <Switch checked={partTime} onCheckedChange={setPartTime} />
             </div>
           )}
+          <div className="flex items-center justify-between rounded-xl bg-secondary/50 px-3 py-2.5">
+            <div className="pr-3"><Label className="text-sm">Presença automática nos dias úteis</Label><p className="text-xs text-muted-foreground">De segunda a sexta o dia fica completo (09:00–13:00 e 14:30–18:30), a partir de hoje. Não marca feriados, pontes, férias, faltas registadas nem dias já marcados.</p></div>
+            <Switch checked={presencaAutomatica} onCheckedChange={setPresencaAutomatica} />
+          </div>
         </div>
         <DialogFooter><Button onClick={submit} disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Guardar</Button></DialogFooter>
       </DialogContent>

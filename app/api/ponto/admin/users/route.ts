@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/ponto/admin-guard";
 import { effectivePontoRole } from "@/lib/ponto/roles";
+import { lerPresencaAutomatica } from "@/lib/ponto/presenca-automatica";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,11 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
     select: { id: true, email: true, name: true, role: true, pontoRole: true, active: true, sendToAccounting: true, partTime: true, createdAt: true },
   });
+  const auto = await lerPresencaAutomatica();
   const users = rows.map(({ pontoRole, role, ...rest }) => ({
     ...rest,
     role: effectivePontoRole(pontoRole, role),
+    presencaAutomatica: !!auto[rest.id],
   }));
   return NextResponse.json({ users });
 }

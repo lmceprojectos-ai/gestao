@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/ponto/admin-guard";
 import { workedMinutesForDay } from "@/lib/ponto/schedule";
+import { aplicarPresencaAutomatica } from "@/lib/ponto/presenca-automatica";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export async function GET(request: Request) {
   const guard = await requireAdmin();
   if (!guard.ok)
     return NextResponse.json({ message: guard.message }, { status: guard.status });
+  await aplicarPresencaAutomatica().catch((e) => console.error("Presença automática:", e));
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // YYYY-MM
