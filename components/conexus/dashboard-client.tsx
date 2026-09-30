@@ -3,6 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+import { ArrowLeft } from 'lucide-react'
+import { hasGestaoAccess } from '@/lib/ponto/roles'
 import { format, addDays, subDays } from 'date-fns'
 import { pt } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, ClipboardList, CheckCircle2, Clock, ArrowRight, ChevronDown, User, Users, StickyNote, Circle, Check, Eye, EyeOff, Settings2, Mic } from 'lucide-react'
@@ -18,6 +22,9 @@ import { KanbanBoard } from '@/components/conexus/kanban-board'
 
 export function DashboardClient() {
   const searchParams = useSearchParams()
+  // Quem não tem acesso à Gestão (ex.: só Ponto) volta ao Ponto
+  const { data: session } = useSession() || {}
+  const temGestao = hasGestaoAccess((session?.user as any)?.role ?? '')
   const [mounted, setMounted] = useState(false)
   const [selectedDate, setSelectedDate] = useState('')
   const [subjects, setSubjects] = useState<SubjectType[]>([])
@@ -301,6 +308,12 @@ export function DashboardClient() {
             <p className="text-sm text-muted-foreground mt-1">Gestão diária de assuntos e tarefas</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="outline" className="shadow-sm">
+              <Link href={temGestao ? '/' : '/ponto/colaborador'}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {temGestao ? 'Voltar à Gestão' : 'Voltar ao Ponto'}
+              </Link>
+            </Button>
             <Button
               onClick={() => { setEditingSubject(null); setShowForm(true) }}
               className="bg-[#f97316] hover:bg-[#ea580c] text-white shadow-md"
