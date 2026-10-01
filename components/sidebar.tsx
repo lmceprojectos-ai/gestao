@@ -47,6 +47,7 @@ import {
   RotateCcw,
   Printer,
   ExternalLink,
+  Globe,
 } from 'lucide-react';
 import { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -476,6 +477,23 @@ function SidebarInner() {
               <Printer className="h-5 w-5 text-[#B3FF00]" />
             </span>
             <span className="truncate">GráficaRápida</span>
+            <ExternalLink className="ml-auto h-3.5 w-3.5 text-white/50 flex-shrink-0" />
+          </a>
+        )}
+
+        {/* Item destacado: site da Criaconsensos (noutra janela), no amarelo da marca */}
+        {(isAdmin || isEditor) && (
+          <a
+            href="https://criaconsensos.pt/"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileOpen(false)}
+            className="group flex items-center gap-3 rounded-xl px-3 py-3 font-semibold text-[14px] transition-all duration-150 shadow-sm border bg-[#FECA00]/15 text-white border-[#FECA00]/50 hover:bg-[#FECA00]/30"
+          >
+            <span className="flex items-center justify-center h-8 w-8 rounded-lg flex-shrink-0 bg-[#FECA00]/30">
+              <Globe className="h-5 w-5 text-[#FECA00]" />
+            </span>
+            <span className="truncate">Criaconsensos</span>
             <ExternalLink className="ml-auto h-3.5 w-3.5 text-white/50 flex-shrink-0" />
           </a>
         )}
